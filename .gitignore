@@ -1,0 +1,14 @@
+# Secrets and Environment Variables
+.env
+client_secret.json
+token.pickle
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+
+# Media Folders (large files we don't want in git)
+uploads/
+output/
+logos/

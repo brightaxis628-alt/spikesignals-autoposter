@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpikeSignals Autoposter</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="background-effects">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
+
+    <main class="container">
+        <header>
+            <div class="logo-container">
+                <i class="fa-solid fa-bolt"></i>
+            </div>
+            <h1>SpikeSignals</h1>
+            <p>Automated Video Distribution</p>
+        </header>
+
+        <div class="card glass">
+            <form id="uploadForm">
+                
+                <!-- Section 1: Video Upload -->
+                <div class="form-section">
+                    <h2 class="section-title"><i class="fa-solid fa-video"></i> Media</h2>
+                    <div class="drop-zone" id="dropZone">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span class="drop-text">Drag & drop your video here</span>
+                        <span class="drop-subtext">or click to browse</span>
+                        <input type="file" id="videoFile" name="video" accept="video/mp4,video/x-m4v,video/*" required hidden>
+                    </div>
+                    <div id="filePreview" class="hidden file-preview">
+                        <i class="fa-solid fa-file-video"></i>
+                        <span id="fileName">No file selected</span>
+                        <button type="button" id="removeFile" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+
+                <!-- Section 2: Metadata -->
+                <div class="form-section">
+                    <h2 class="section-title"><i class="fa-solid fa-pen-to-square"></i> Details</h2>
+                    
+                    <div class="input-group">
+                        <label for="title">Video Title</label>
+                        <input type="text" id="title" placeholder="Enter a catchy title..." required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="description">Description (TikTok/YouTube)</label>
+                        <textarea id="description" rows="3" placeholder="Add some context and hashtags..." required></textarea>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="caption">Instagram Caption</label>
+                        <textarea id="caption" rows="3" placeholder="Engage your Instagram audience..." required></textarea>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="ngrokUrl">Ngrok Public URL (Optional)</label>
+                        <input type="url" id="ngrokUrl" placeholder="https://your-ngrok-url.app">
+                        <small class="help-text">Required if testing locally so Zernio can download the video.</small>
+                    </div>
+                </div>
+
+                <!-- Section 3: Platforms -->
+                <div class="form-section">
+                    <h2 class="section-title"><i class="fa-solid fa-share-nodes"></i> Platforms</h2>
+                    
+                    <div class="platform-grid">
+                        <label class="platform-toggle">
+                            <input type="checkbox" name="platforms" value="instagram" checked>
+                            <div class="platform-card instagram">
+                                <i class="fa-brands fa-instagram"></i>
+                                <span>Instagram</span>
+                            </div>
+                        </label>
+
+                        <label class="platform-toggle">
+                            <input type="checkbox" name="platforms" value="tiktok" checked>
+                            <div class="platform-card tiktok">
+                                <i class="fa-brands fa-tiktok"></i>
+                                <span>TikTok</span>
+                            </div>
+                        </label>
+
+                        <label class="platform-toggle">
+                            <input type="checkbox" name="platforms" value="youtube" checked>
+                            <div class="platform-card youtube">
+                                <i class="fa-brands fa-youtube"></i>
+                                <span>YouTube</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <button type="submit" id="submitBtn" class="primary-btn">
+                    <span class="btn-text">Process & Publish <i class="fa-solid fa-rocket"></i></span>
+                    <span class="loader hidden"></span>
+                </button>
+
+            </form>
+        </div>
+
+        <!-- Output Console -->
+        <div class="card glass console hidden" id="console">
+            <div class="console-header">
+                <i class="fa-solid fa-terminal"></i>
+                <span>Status Console</span>
+            </div>
+            <div class="console-body" id="consoleOutput">
+                <!-- Logs will be injected here -->
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

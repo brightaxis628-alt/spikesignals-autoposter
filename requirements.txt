@@ -1,0 +1,10 @@
+fastapi==0.111.0
+uvicorn==0.29.0
+python-multipart==0.0.9
+moviepy==1.0.3
+requests==2.32.3
+google-auth-oauthlib==1.2.0
+google-api-python-client==2.133.0
+python-dotenv==1.0.1
+
+zernio-sdk
