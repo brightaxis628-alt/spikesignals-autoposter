@@ -65,7 +65,7 @@ async def publish_all(data: PublishRequest, request: Request):
             return {"status": "error", "message": f"File {edited_video_path} not found. Please process the video first."}
 
         # Determine Public URL for Zernio to fetch media
-        base_url = data.public_base_url.rstrip('/') if data.public_base_url else str(request.base_url).rstrip('/')
+        base_url = data.public_base_url.strip().rstrip('/') if data.public_base_url else str(request.base_url).rstrip('/')
         encoded_filename = urllib.parse.quote(data.video_filename)
         public_video_url = f"{base_url}/output/{encoded_filename}"
 
