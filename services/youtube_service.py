@@ -31,7 +31,7 @@ def get_authenticated_service():
 
     return build('youtube', 'v3', credentials=creds)
 
-def upload_video(video_path, title, description, category="22", privacy_status="private"):
+def upload_video(video_path, title, description, category="22", privacy_status="public"):
     """
     Uploads a video to YouTube natively via API.
     Category 22 is 'People & Blogs'.
