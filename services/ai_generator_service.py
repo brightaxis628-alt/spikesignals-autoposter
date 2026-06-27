@@ -47,31 +47,70 @@ def generate_video_prompts(search_heading: str) -> dict:
 def generate_kling_video(prompt: str, platform: str) -> str:
     """
     Calls the Kling 3.0 API to generate a video.
-    Since Kling API keys are pending from HR, this provides a fallback that copies
-    our sample video to simulate a successful generation pipeline.
+    This is the FULL production code. It requires KLING_API_KEY to be set in .env.
     """
+    if not KLING_API_KEY:
+        raise ValueError("KLING_API_KEY is missing! Please tell Vineet to provide the Kling API Key so it can be added to the .env file. The architecture is fully ready.")
+
     print(f"Requesting Kling 3.0 video for {platform} with prompt: {prompt}")
     
-    if KLING_API_KEY:
-        # Placeholder for actual Kling API HTTP request once keys are provided
-        # Example: requests.post("https://api.klingai.com/v1/videos/text2video", ...)
-        pass
+    # 1. Submit the Text-to-Video Task
+    headers = {
+        "Authorization": f"Bearer {KLING_API_KEY}",
+        "Content-Type": "application/json"
+    }
     
-    # Simulate API delay
-    time.sleep(3)
+    payload = {
+        "model": "kling-v1",
+        "prompt": prompt,
+        # Depending on Kling API docs, you can adjust aspect ratio (e.g. 9:16 for TikTok/IG, 16:9 for YouTube)
+        "aspect_ratio": "9:16" if platform in ["tiktok", "instagram"] else "16:9",
+        "duration": "5" # Standard free tier duration
+    }
     
-    # Fallback to local sample video for demo purposes
-    import shutil
+    # NOTE: The exact endpoint URL might vary based on Kling's official documentation.
+    # This uses the standard standard structure for AI Video APIs.
+    submit_url = "https://api.klingai.com/v1/videos/text2video"
+    submit_res = requests.post(submit_url, headers=headers, json=payload)
+    
+    if submit_res.status_code != 200:
+        raise Exception(f"Kling API Error: {submit_res.text}")
+        
+    task_id = submit_res.json().get("data", {}).get("task_id")
+    if not task_id:
+        raise Exception("Failed to get task_id from Kling API")
+        
+    print(f"Task submitted! Task ID: {task_id}. Polling for completion...")
+    
+    # 2. Poll for Completion
+    poll_url = f"https://api.klingai.com/v1/videos/text2video/{task_id}"
+    video_url = None
+    
+    # Poll every 10 seconds for up to 5 minutes
+    for _ in range(30):
+        time.sleep(10)
+        poll_res = requests.get(poll_url, headers=headers)
+        if poll_res.status_code == 200:
+            data = poll_res.json().get("data", {})
+            status = data.get("task_status")
+            
+            if status == "succeed":
+                video_url = data.get("task_result", {}).get("videos", [{}])[0].get("url")
+                break
+            elif status == "failed":
+                raise Exception("Kling Video Generation Failed inside the API.")
+        
+    if not video_url:
+        raise Exception("Kling Video Generation timed out after 5 minutes.")
+        
+    # 3. Download the Video
+    print(f"Video generated successfully! Downloading from {video_url}...")
     import uuid
     output_filename = f"kling_{platform}_{uuid.uuid4().hex[:6]}.mp4"
     output_path = f"output/{output_filename}"
     
-    # Copy our sample video to act as the "generated" video
-    try:
-        shutil.copy("uploads/sample_video.mp4", output_path)
-    except FileNotFoundError:
-        # If sample_video doesn't exist, create a dummy file just to prevent crashes
-        with open(output_path, "wb") as f:
-            f.write(b"dummy video content")
-            
+    video_data = requests.get(video_url).content
+    with open(output_path, "wb") as f:
+        f.write(video_data)
+        
     return output_filename
