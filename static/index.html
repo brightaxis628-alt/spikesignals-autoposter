@@ -21,34 +21,47 @@
 
     <main class="container">
         <header>
-            <div class="logo-container">
-                <i class="fa-solid fa-bolt"></i>
+            <h1>SpikeSignals Autoposter</h1>
+            <p>Upload a video or generate one with AI, add a logo, and auto-publish!</p>
+            
+            <div class="mode-toggle">
+                <label class="switch-label">
+                    <span>Manual Upload</span>
+                    <label class="switch">
+                        <input type="checkbox" id="aiModeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="ai-text">AI Generation Mode</span>
+                </label>
             </div>
-            <h1>SpikeSignals</h1>
-            <p>Automated Video Distribution</p>
         </header>
 
         <div class="card glass">
             <form id="uploadForm">
                 
-                <!-- Section 1: Video Upload -->
-                <div class="form-section">
-                    <h2 class="section-title"><i class="fa-solid fa-video"></i> Media</h2>
+                <!-- Manual Upload Section -->
+                <div class="form-group" id="manualSection">
+                    <label><i class="fas fa-video"></i> MEDIA</label>
                     <div class="drop-zone" id="dropZone">
-                        <i class="fa-solid fa-cloud-arrow-up"></i>
-                        <span class="drop-text">Drag & drop your video here</span>
-                        <span class="drop-subtext">or click to browse</span>
-                        <input type="file" id="videoFile" name="video" accept="video/mp4,video/x-m4v,video/*" required hidden>
+                        <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                        <p>Drag and drop a video file here, or click to browse</p>
+                        <input type="file" id="videoFile" accept="video/mp4,video/quicktime" hidden>
                     </div>
-                    <div id="filePreview" class="hidden file-preview">
-                        <i class="fa-solid fa-file-video"></i>
+                    <div id="filePreview" class="file-preview hidden">
+                        <i class="fas fa-file-video"></i>
                         <span id="fileName">No file selected</span>
-                        <button type="button" id="removeFile" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+                        <button type="button" id="removeFile"><i class="fas fa-times"></i></button>
                     </div>
                 </div>
 
-                <!-- Section 2: Metadata -->
-                <div class="form-section">
+                <!-- AI Generation Section -->
+                <div class="form-group hidden" id="aiSection">
+                    <label><i class="fas fa-magic"></i> TRENDING TOPIC</label>
+                    <input type="text" id="searchHeading" class="text-input" placeholder="e.g., The Future of AI in Space Exploration">
+                    <p class="help-text">Enter a search heading. Kling 3.0 will generate 3 unique variants for each platform automatically!</p>
+                </div>
+
+                <div class="form-group" id="manualDetailsSection">
                     <h2 class="section-title"><i class="fa-solid fa-pen-to-square"></i> Details</h2>
                     
                     <div class="input-group">
