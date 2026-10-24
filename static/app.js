@@ -455,6 +455,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 log(`[1/3] Downloading original video stream from: ${url}...`, 'info');
 
+                let stepCount = 1;
+                const heartbeat = setInterval(() => {
+                    stepCount++;
+                    if (stepCount === 2) {
+                        log(`[2/3] Adding company logo watermark with ultra-fast FFmpeg...`, 'info');
+                    } else if (stepCount === 3) {
+                        log(`[3/3] Uploading branded video to CDN and publishing to ${platforms.join(', ')}...`, 'info');
+                    } else if (stepCount > 3) {
+                        log(`Processing network publish on ${platforms.join(', ')}...`, 'info');
+                    }
+                }, 7000);
+
                 const payload = {
                     url: url,
                     direct_url: (selectedVideoData && selectedVideoData.direct_video_url && selectedVideoData.url === url) ? selectedVideoData.direct_video_url : null,
@@ -465,11 +477,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     platforms: platforms
                 };
 
-                const res = await fetch('/fetch-and-publish', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                let res;
+                try {
+                    res = await fetch('/fetch-and-publish', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                } finally {
+                    clearInterval(heartbeat);
+                }
 
                 const data = await res.json();
                 if (data.status !== 'success') {
