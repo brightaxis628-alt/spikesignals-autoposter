@@ -41,7 +41,7 @@
         </header>
 
         <div class="card glass">
-            <form id="unifiedForm">
+            <form id="unifiedForm" onsubmit="return false;">
                 
                 <!-- 1. SEARCH & FETCH TRENDING VIDEO SECTION -->
                 <div class="form-section" id="fetchSection">
@@ -184,7 +184,7 @@
                 </div>
 
                 <!-- Submit Button -->
-                <button type="submit" id="submitBtn" class="primary-btn">
+                <button type="button" id="submitBtn" class="primary-btn">
                     <span class="btn-text">Brand Logo & Auto-Publish <i class="fa-solid fa-rocket"></i></span>
                     <span class="loader hidden"></span>
                 </button>

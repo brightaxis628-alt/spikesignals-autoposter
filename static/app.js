@@ -99,10 +99,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- 1. SEARCH TRENDING VIDEOS BY WORDS & PLATFORM ---
-    searchBtn.addEventListener('click', () => performSearch(true));
+    searchBtn.addEventListener('click', (e) => {
+        if (e) e.preventDefault();
+        performSearch(true);
+    });
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
+            e.stopPropagation();
             performSearch(true);
         }
     });
@@ -400,9 +404,12 @@ document.addEventListener('DOMContentLoaded', () => {
         consoleOutput.scrollTop = consoleOutput.scrollHeight;
     }
 
-    // --- Form Submission Handling ---
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    // --- Form Submission & Publish Handling ---
+    async function handlePublish(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
 
         const platformCheckboxes = document.querySelectorAll('input[name="platforms"]:checked');
         const platforms = Array.from(platformCheckboxes).map(cb => cb.value);
@@ -579,5 +586,8 @@ document.addEventListener('DOMContentLoaded', () => {
             btnText.classList.remove('hidden');
             loader.classList.add('hidden');
         }
-    });
+    }
+
+    submitBtn.addEventListener('click', handlePublish);
+    form.addEventListener('submit', (e) => { e.preventDefault(); return false; });
 });
