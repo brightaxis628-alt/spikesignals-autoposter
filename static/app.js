@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         try {
-            const endpoint = `/search-trending?query=${encodeURIComponent(query)}&platform=${encodeURIComponent(selectedPlatformSource)}&max_results=6`;
+            const endpoint = `/search-trending?query=${encodeURIComponent(query)}&platform=${encodeURIComponent(selectedPlatformSource)}&max_results=8`;
             const res = await fetch(endpoint);
             const data = await res.json();
 
@@ -178,6 +178,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 badgeClass = 'badge-tk';
                 badgeIcon = 'fa-brands fa-tiktok';
                 badgeLabel = 'TikTok';
+            } else {
+                if (video.content_type === 'Short' || (video.duration && video.duration <= 95)) {
+                    badgeClass = 'badge-yt';
+                    badgeIcon = 'fa-brands fa-youtube';
+                    badgeLabel = 'Shorts';
+                } else {
+                    badgeClass = 'badge-yt';
+                    badgeIcon = 'fa-brands fa-youtube';
+                    badgeLabel = 'YouTube';
+                }
             }
 
             card.innerHTML = `
@@ -220,9 +230,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatDuration(sec) {
         if (!sec || isNaN(sec)) return '';
-        const m = Math.floor(sec / 60);
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
         const s = Math.floor(sec % 60);
-        return `${m}:${s < 10 ? '0' : ''}${s}`;
+        if (h > 0) {
+            return ${h}::;
+        }
+        return ${m}:;
     }
 
     function escapeHtml(text) {
