@@ -250,13 +250,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function formatDuration(sec) {
         if (!sec || isNaN(sec)) return '';
-        const h = Math.floor(sec / 3600);
-        const m = Math.floor((sec % 3600) / 60);
-        const s = Math.floor(sec % 60);
+        var h = Math.floor(sec / 3600);
+        var m = Math.floor((sec % 3600) / 60);
+        var s = Math.floor(sec % 60);
+        var sStr = s < 10 ? '0' + s : '' + s;
         if (h > 0) {
-            return ${h}::;
+            var mStr = m < 10 ? '0' + m : '' + m;
+            return h + ':' + mStr + ':' + sStr;
         }
-        return ${m}:;
+        return m + ':' + sStr;
     }
 
     function escapeHtml(text) {
