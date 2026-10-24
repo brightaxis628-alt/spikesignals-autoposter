@@ -152,9 +152,63 @@
                 <!-- Hidden Input: Auto-detected Render / Local Host -->
                 <input type="hidden" id="publicBaseUrl" value="">
 
+                <!-- 3. BRAND LOGO & WATERMARK POSITION SECTION -->
+                <div class="form-section" id="watermarkSection">
+                    <h2 class="section-title"><i class="fa-solid fa-stamp"></i> 3. Brand Logo & Watermark Placement</h2>
+                    
+                    <div class="watermark-controls-container">
+                        <!-- Left sub-box: Logo Upload & Preview -->
+                        <div class="logo-box">
+                            <label class="control-label"><i class="fa-solid fa-image"></i> Brand Logo</label>
+                            <div class="logo-preview-wrapper">
+                                <div class="logo-preview-img-container">
+                                    <img id="activeLogoPreview" src="/logos/logo.png" alt="Brand Logo">
+                                </div>
+                                <div class="logo-actions">
+                                    <input type="file" id="customLogoInput" accept="image/png,image/jpeg,image/webp" hidden>
+                                    <button type="button" id="uploadLogoBtn" class="secondary-btn logo-btn">
+                                        <i class="fa-solid fa-arrow-up-from-bracket"></i> Change Logo
+                                    </button>
+                                    <button type="button" id="resetLogoBtn" class="ghost-btn logo-btn hidden" title="Reset to default company logo">
+                                        <i class="fa-solid fa-rotate-left"></i> Reset
+                                    </button>
+                                </div>
+                            </div>
+                            <small class="help-text" id="logoStatusText">Using default company logo (PNG with transparency recommended).</small>
+                        </div>
+
+                        <!-- Right sub-box: Watermark Direction / Position -->
+                        <div class="position-box">
+                            <label class="control-label"><i class="fa-solid fa-arrows-to-dot"></i> Watermark Direction / Position</label>
+                            <div class="position-grid">
+                                <button type="button" class="position-btn active" data-pos="top-left">
+                                    <i class="fa-solid fa-arrow-up-long fa-rotate-by" style="--fa-rotate-angle: -45deg;"></i> Top Left
+                                </button>
+                                <button type="button" class="position-btn" data-pos="top-right">
+                                    <i class="fa-solid fa-arrow-up-long fa-rotate-by" style="--fa-rotate-angle: 45deg;"></i> Top Right
+                                </button>
+                                <button type="button" class="position-btn" data-pos="center">
+                                    <i class="fa-solid fa-crosshairs"></i> Center
+                                </button>
+                                <button type="button" class="position-btn" data-pos="bottom-left">
+                                    <i class="fa-solid fa-arrow-down-long fa-rotate-by" style="--fa-rotate-angle: 45deg;"></i> Bottom Left
+                                </button>
+                                <button type="button" class="position-btn" data-pos="bottom-right">
+                                    <i class="fa-solid fa-arrow-down-long fa-rotate-by" style="--fa-rotate-angle: -45deg;"></i> Bottom Right
+                                </button>
+                            </div>
+                            <small class="help-text">Choose in which direction/corner the logo appears on the video.</small>
+                        </div>
+                    </div>
+
+                    <!-- Hidden inputs to track active logo path and chosen position -->
+                    <input type="hidden" id="logoPositionInput" value="top-left">
+                    <input type="hidden" id="customLogoPathInput" value="logos/logo.png">
+                </div>
+
                 <!-- TARGET PLATFORMS -->
                 <div class="form-section">
-                    <h2 class="section-title"><i class="fa-solid fa-share-nodes"></i> 3. Target Platforms to Post</h2>
+                    <h2 class="section-title"><i class="fa-solid fa-share-nodes"></i> 4. Target Platforms to Post</h2>
                     
                     <div class="platform-grid">
                         <label class="platform-toggle">

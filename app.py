@@ -25,6 +25,7 @@ os.makedirs("logos", exist_ok=True)
 # Mount the output directory so we can serve videos statically for Ngrok/TikTok/Instagram/Render
 app.mount("/output", StaticFiles(directory="output"), name="output")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/logos", StaticFiles(directory="logos"), name="logos")
 
 def get_effective_base_url(custom_url: str = "", request: Request = None) -> str:
     """
@@ -92,20 +93,46 @@ def auto_make_copy(data: CopyRequest):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+@app.post("/upload-logo")
+async def upload_logo(file: UploadFile = File(...)):
+    """
+    Upload a custom watermark logo (PNG / JPG / WEBP).
+    Returns saved path and public preview URL.
+    """
+    try:
+        import time, re
+        safe_name = re.sub(r'[^a-zA-Z0-9_\.-]', '_', file.filename or "logo.png")
+        saved_filename = f"custom_{int(time.time())}_{safe_name}"
+        saved_path = f"logos/{saved_filename}"
+        with open(saved_path, "wb") as f:
+            f.write(await file.read())
+        return {
+            "status": "success",
+            "logo_path": saved_path,
+            "filename": saved_filename,
+            "preview_url": f"/logos/{saved_filename}"
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @app.post("/process-video")
-async def process_video(file: UploadFile = File(...)):
+async def process_video(
+    file: UploadFile = File(...),
+    logo_path: str = Form("logos/logo.png"),
+    logo_position: str = Form("top-left")
+):
     input_path = f"uploads/{file.filename}"
     with open(input_path, "wb") as f:
         f.write(await file.read())
 
     output_filename = f"edited_{file.filename}"
     output_path = f"output/{output_filename}"
-    logo_path = "logos/logo.png"
+    effective_logo = logo_path if (logo_path and os.path.exists(logo_path)) else "logos/logo.png"
 
-    if not os.path.exists(logo_path):
-        return {"status": "error", "message": "Please place a logo.png inside the logos/ directory first!"}
+    if not os.path.exists(effective_logo):
+        return {"status": "error", "message": "No logo found. Please place logo.png inside logos/ or upload a custom logo!"}
 
-    add_logo(input_path, logo_path, output_path)
+    add_logo(input_path, effective_logo, output_path, position=logo_position)
 
     return {"status": "success", "output_file": output_filename}
 
@@ -113,12 +140,14 @@ class FetchVideoRequest(BaseModel):
     url: str
     direct_url: Optional[str] = None
     add_watermark: bool = True
+    logo_path: Optional[str] = "logos/logo.png"
+    logo_position: Optional[str] = "top-left"
 
 @app.post("/fetch-video")
 async def fetch_video(data: FetchVideoRequest):
     """
     Downloads a video from TikTok, Instagram, YouTube, or direct link,
-    adds top-left logo, and makes it ready for publishing.
+    adds logo at selected position, and makes it ready for publishing.
     """
     try:
         download_info = download_video_from_url(data.url, direct_url=data.direct_url)
@@ -126,12 +155,12 @@ async def fetch_video(data: FetchVideoRequest):
         
         output_filename = f"edited_{download_info['filename']}"
         output_path = f"output/{output_filename}"
-        logo_path = "logos/logo.png"
+        effective_logo = data.logo_path if (data.logo_path and os.path.exists(data.logo_path)) else "logos/logo.png"
 
         if data.add_watermark:
-            if not os.path.exists(logo_path):
-                return {"status": "error", "message": "Please place a logo.png inside the logos/ directory first!"}
-            add_logo(input_path, logo_path, output_path)
+            if not os.path.exists(effective_logo):
+                return {"status": "error", "message": "No logo found. Please place logo.png inside logos/ or upload one."}
+            add_logo(input_path, effective_logo, output_path, position=data.logo_position or "top-left")
             processed_file = output_filename
         else:
             shutil.copy(input_path, output_path)
@@ -157,11 +186,13 @@ class FetchAndPublishRequest(BaseModel):
     caption: Optional[str] = ""
     public_base_url: str = ""
     platforms: List[str] = ["instagram", "tiktok", "youtube"]
+    logo_path: Optional[str] = "logos/logo.png"
+    logo_position: Optional[str] = "top-left"
 
 @app.post("/fetch-and-publish")
 async def fetch_and_publish(data: FetchAndPublishRequest, request: Request):
     """
-    One-click workflow: Fetches/downloads video, places top-left logo,
+    One-click workflow: Fetches/downloads video, places logo at selected position,
     and publishes directly to TikTok, Instagram, and YouTube.
     """
     try:
@@ -172,10 +203,11 @@ async def fetch_and_publish(data: FetchAndPublishRequest, request: Request):
         # Step 2: Add logo
         output_filename = f"edited_{download_info['filename']}"
         output_path = f"output/{output_filename}"
-        logo_path = "logos/logo.png"
+        effective_logo = data.logo_path if (data.logo_path and os.path.exists(data.logo_path)) else "logos/logo.png"
+        pos = data.logo_position or "top-left"
         
-        if os.path.exists(logo_path):
-            add_logo(input_path, logo_path, output_path)
+        if os.path.exists(effective_logo):
+            add_logo(input_path, effective_logo, output_path, position=pos)
         else:
             shutil.copy(input_path, output_path)
 

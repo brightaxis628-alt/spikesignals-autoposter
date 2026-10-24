@@ -46,6 +46,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const regenerateCopyBtn = document.getElementById('regenerateCopyBtn');
     const autoMakeAlert = document.getElementById('autoMakeAlert');
 
+    // Watermark & Custom Logo Elements
+    const activeLogoPreview = document.getElementById('activeLogoPreview');
+    const customLogoInput = document.getElementById('customLogoInput');
+    const uploadLogoBtn = document.getElementById('uploadLogoBtn');
+    const resetLogoBtn = document.getElementById('resetLogoBtn');
+    const logoStatusText = document.getElementById('logoStatusText');
+    const logoPositionInput = document.getElementById('logoPositionInput');
+    const customLogoPathInput = document.getElementById('customLogoPathInput');
+    const positionBtns = document.querySelectorAll('.position-btn');
+
     // AI & Other Inputs
     const searchHeadingInput = document.getElementById('searchHeading');
     const publicBaseUrlInput = document.getElementById('publicBaseUrl');
@@ -392,6 +402,73 @@ document.addEventListener('DOMContentLoaded', () => {
         filePreview.classList.add('hidden');
     });
 
+    // --- Watermark Position Selector ---
+    positionBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            positionBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const pos = btn.getAttribute('data-pos');
+            if (logoPositionInput) {
+                logoPositionInput.value = pos;
+            }
+        });
+    });
+
+    // --- Custom Logo Upload & Reset ---
+    if (uploadLogoBtn && customLogoInput) {
+        uploadLogoBtn.addEventListener('click', () => {
+            customLogoInput.click();
+        });
+
+        customLogoInput.addEventListener('change', async function() {
+            if (!this.files || this.files.length === 0) return;
+            const file = this.files[0];
+            
+            if (logoStatusText) {
+                logoStatusText.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Uploading ${file.name}...`;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const res = await fetch('/upload-logo', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    if (activeLogoPreview) activeLogoPreview.src = data.preview_url;
+                    if (customLogoPathInput) customLogoPathInput.value = data.logo_path;
+                    if (resetLogoBtn) resetLogoBtn.classList.remove('hidden');
+                    if (logoStatusText) {
+                        logoStatusText.innerHTML = `<span style="color: #34d399; font-weight: 600;"><i class="fa-solid fa-circle-check"></i> Custom logo active:</span> ${file.name}`;
+                    }
+                } else {
+                    throw new Error(data.message || 'Failed to upload logo.');
+                }
+            } catch (err) {
+                alert('Logo upload failed: ' + err.message);
+                if (logoStatusText) {
+                    logoStatusText.innerText = 'Error uploading custom logo. Reverted to default.';
+                }
+            }
+        });
+    }
+
+    if (resetLogoBtn) {
+        resetLogoBtn.addEventListener('click', () => {
+            if (activeLogoPreview) activeLogoPreview.src = '/logos/logo.png';
+            if (customLogoPathInput) customLogoPathInput.value = 'logos/logo.png';
+            if (customLogoInput) customLogoInput.value = '';
+            resetLogoBtn.classList.add('hidden');
+            if (logoStatusText) {
+                logoStatusText.innerText = 'Using default company logo (PNG with transparency recommended).';
+            }
+        });
+    }
+
     // --- Logging Helper ---
     function log(message, type = 'info') {
         consoleEl.classList.remove('hidden');
@@ -448,6 +525,10 @@ document.addEventListener('DOMContentLoaded', () => {
         consoleOutput.innerHTML = '';
 
         try {
+            const chosenPosition = (logoPositionInput && logoPositionInput.value) ? logoPositionInput.value : 'top-left';
+            const chosenLogoPath = (customLogoPathInput && customLogoPathInput.value) ? customLogoPathInput.value : 'logos/logo.png';
+            const posDisplay = chosenPosition.replace('-', ' ').toUpperCase();
+
             // MODE 1: FETCH URL, BRAND LOGO & AUTO-POST
             if (currentMode === 'fetch') {
                 const url = videoUrlInput.value.trim();
@@ -459,7 +540,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const heartbeat = setInterval(() => {
                     stepCount++;
                     if (stepCount === 2) {
-                        log(`[2/3] Adding company logo watermark with ultra-fast FFmpeg...`, 'info');
+                        log(`[2/3] Adding watermark (${posDisplay}) with ultra-fast FFmpeg...`, 'info');
                     } else if (stepCount === 3) {
                         log(`[3/3] Uploading branded video to CDN and publishing to ${platforms.join(', ')}...`, 'info');
                     } else if (stepCount > 3) {
@@ -474,7 +555,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     description: descInput.value.trim(),
                     caption: captionInput.value.trim(),
                     public_base_url: publicBaseUrl,
-                    platforms: platforms
+                    platforms: platforms,
+                    logo_path: chosenLogoPath,
+                    logo_position: chosenPosition
                 };
 
                 let res;
@@ -493,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(data.message || "Failed during fetch & post process.");
                 }
 
-                log(`[2/3] Top-left company logo stamped on video: ${data.output_file}`, 'success');
+                log(`[2/3] Watermark branded on video (${posDisplay}): ${data.output_file}`, 'success');
                 log(`[3/3] Publishing to platforms: ${platforms.join(', ')}...`, 'info');
 
                 if (data.public_video_url_used) {
@@ -516,6 +599,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 log(`[1/3] Uploading local file: ${selectedFile.name}...`, 'info');
                 const formData = new FormData();
                 formData.append('file', selectedFile);
+                formData.append('logo_path', chosenLogoPath);
+                formData.append('logo_position', chosenPosition);
 
                 const uploadRes = await fetch('/process-video', {
                     method: 'POST',
@@ -528,7 +613,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 const outputFileName = uploadData.output_file;
-                log(`[2/3] Video branded with top-left logo. Saved as: ${outputFileName}`, 'success');
+                log(`[2/3] Video branded with logo (${posDisplay}). Saved as: ${outputFileName}`, 'success');
                 log(`[3/3] Publishing to platforms: ${platforms.join(', ')}...`, 'info');
 
                 const publishPayload = {
