@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpikeSignals Autoposter</title>
+    <title>SpikeSignals - Content & Auto-Post Hub</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,27 +21,93 @@
 
     <main class="container">
         <header>
-            <h1>SpikeSignals Autoposter</h1>
-            <p>Upload a video or generate one with AI, add a logo, and auto-publish!</p>
+            <div class="logo-container">
+                <i class="fa-solid fa-bolt"></i>
+            </div>
+            <h1>SpikeSignals Hub</h1>
+            <p>Fetch trending videos, brand with top-left logo, auto-generate viral captions, and post everywhere.</p>
             
-            <div class="mode-toggle">
-                <label class="switch-label">
-                    <span>Manual Upload</span>
-                    <label class="switch">
-                        <input type="checkbox" id="aiModeToggle">
-                        <span class="slider round"></span>
-                    </label>
-                    <span class="ai-text">AI Generation Mode</span>
-                </label>
+            <!-- Segmented Mode Tabs -->
+            <div class="tabs-container">
+                <div class="mode-tabs">
+                    <button type="button" class="mode-tab-btn active" data-mode="fetch">
+                        <i class="fa-solid fa-fire"></i> Trending & Auto-Post
+                    </button>
+                    <button type="button" class="mode-tab-btn" data-mode="upload">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Manual Upload
+                    </button>
+                </div>
             </div>
         </header>
 
         <div class="card glass">
-            <form id="uploadForm">
+            <form id="unifiedForm">
                 
-                <!-- Manual Upload Section -->
-                <div class="form-group" id="manualSection">
-                    <label><i class="fas fa-video"></i> MEDIA</label>
+                <!-- 1. SEARCH & FETCH TRENDING VIDEO SECTION -->
+                <div class="form-section" id="fetchSection">
+                    <h2 class="section-title"><i class="fa-solid fa-magnifying-glass"></i> 1. Discover Trending Videos</h2>
+                    
+                    <!-- Platform Source Filter -->
+                    <div class="platform-filter-row">
+                        <span class="filter-label">Source App:</span>
+                        <div class="source-pill active" data-platform="youtube">
+                            <i class="fa-brands fa-youtube"></i> YouTube
+                        </div>
+                        <div class="source-pill" data-platform="instagram">
+                            <i class="fa-brands fa-instagram"></i> Instagram Reels
+                        </div>
+                        <div class="source-pill" data-platform="tiktok">
+                            <i class="fa-brands fa-tiktok"></i> TikTok
+                        </div>
+                    </div>
+
+                    <!-- Search Bar Row -->
+                    <div class="search-bar-row">
+                        <input type="text" id="searchInput" placeholder="Type words (e.g. 'Trading', 'AI', 'Fitness') or leave empty for top trending...">
+                        <button type="button" id="searchBtn" class="secondary-btn">
+                            <span id="searchBtnText"><i class="fa-solid fa-fire"></i> Fetch Trending</span>
+                            <span id="searchLoader" class="loader hidden"></span>
+                        </button>
+                    </div>
+
+                    <!-- Direct URL override -->
+                    <div class="input-group" style="margin-top: 0.5rem;">
+                        <input type="url" id="videoUrl" placeholder="Or directly paste TikTok / Instagram Reel / YouTube URL here">
+                        <small class="help-text">Select a video from the grid below, or paste any video link directly.</small>
+                    </div>
+
+                    <!-- Grid of Search Results -->
+                    <div id="videoResultsContainer" class="hidden" style="margin-top: 1.2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                            <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+                                <i class="fa-solid fa-list-check"></i> Choose Video to Brand:
+                            </span>
+                            <span id="resultsCount" style="font-size: 0.78rem; color: #60a5fa; font-weight: 600;"></span>
+                        </div>
+                        <div class="video-grid" id="videoGrid">
+                            <!-- Injected dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Selected Video Banner -->
+                    <div id="selectedVideoBanner" class="preview-card hidden">
+                        <img id="selectedThumb" src="" alt="Thumbnail" class="preview-thumb" referrerpolicy="no-referrer">
+                        <div class="preview-info">
+                            <div class="preview-title" id="selectedTitle">No video chosen</div>
+                            <div class="preview-author" id="selectedAuthor">Source</div>
+                            <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap;">
+                                <span class="badge-tag"><i class="fa-solid fa-circle-check"></i> Selected & Ready for Top-Left Logo</span>
+                                <a id="selectedVideoLink" href="#" target="_blank" rel="noopener noreferrer" class="watch-link-btn" style="display: none;">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open & Watch Video
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. MANUAL UPLOAD SECTION -->
+                <div class="form-section hidden" id="uploadSection">
+                    <h2 class="section-title"><i class="fa-solid fa-video"></i> 1. Media Upload</h2>
                     <div class="drop-zone" id="dropZone">
                         <i class="fas fa-cloud-upload-alt upload-icon"></i>
                         <p>Drag and drop a video file here, or click to browse</p>
@@ -54,24 +120,27 @@
                     </div>
                 </div>
 
-                <!-- AI Generation Section -->
-                <div class="form-group hidden" id="aiSection">
-                    <label><i class="fas fa-magic"></i> TRENDING TOPIC</label>
-                    <input type="text" id="searchHeading" class="text-input" placeholder="e.g., The Future of AI in Space Exploration">
-                    <p class="help-text">Enter a search heading. Kling 3.0 will generate 3 unique variants for each platform automatically!</p>
-                </div>
+                <!-- METADATA & DETAILS SECTION (Shared for Fetch & Manual) -->
+                <div class="form-section" id="detailsSection">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8rem;">
+                        <h2 class="section-title" style="margin-bottom: 0;"><i class="fa-solid fa-pen-to-square"></i> 2. Auto-Crafted Captions & Lines</h2>
+                        <button type="button" id="regenerateCopyBtn" class="secondary-btn" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Make Copy
+                        </button>
+                    </div>
 
-                <div class="form-group" id="manualDetailsSection">
-                    <h2 class="section-title"><i class="fa-solid fa-pen-to-square"></i> Details</h2>
+                    <div id="autoMakeAlert" class="automake-badge hidden">
+                        <i class="fa-solid fa-sparkles"></i> Lines, captions & hashtags automatically crafted!
+                    </div>
                     
                     <div class="input-group">
-                        <label for="title">Video Title</label>
-                        <input type="text" id="title" placeholder="Enter a catchy title...">
+                        <label for="title">Title (Auto-filled on video selection)</label>
+                        <input type="text" id="title" placeholder="Catchy title for YouTube & TikTok...">
                     </div>
 
                     <div class="input-group">
-                        <label for="description">Description (TikTok/YouTube)</label>
-                        <textarea id="description" rows="3" placeholder="Add some context and hashtags..."></textarea>
+                        <label for="description">Description / Hashtags (TikTok & YouTube)</label>
+                        <textarea id="description" rows="3" placeholder="#trend #tech #viral..."></textarea>
                     </div>
 
                     <div class="input-group">
@@ -79,18 +148,13 @@
                         <textarea id="caption" rows="3" placeholder="Engage your Instagram audience..."></textarea>
                     </div>
                 </div>
-                
-                <div class="form-group" id="globalDetailsSection">
-                    <div class="input-group">
-                        <label for="ngrokUrl">Ngrok Public URL (Required for Insta/TikTok)</label>
-                        <input type="url" id="ngrokUrl" placeholder="https://your-ngrok-url.app">
-                        <small class="help-text">Paste your Forwarding URL from the ngrok terminal so Zernio can download the video.</small>
-                    </div>
-                </div>
 
-                <!-- Section 3: Platforms -->
+                <!-- Hidden Input: Auto-detected Render / Local Host -->
+                <input type="hidden" id="publicBaseUrl" value="">
+
+                <!-- TARGET PLATFORMS -->
                 <div class="form-section">
-                    <h2 class="section-title"><i class="fa-solid fa-share-nodes"></i> Platforms</h2>
+                    <h2 class="section-title"><i class="fa-solid fa-share-nodes"></i> 3. Target Platforms to Post</h2>
                     
                     <div class="platform-grid">
                         <label class="platform-toggle">
@@ -110,7 +174,7 @@
                         </label>
 
                         <label class="platform-toggle">
-                            <input type="checkbox" name="platforms" value="youtube" checked>
+                            <input type="checkbox" name="platforms" value="youtube">
                             <div class="platform-card youtube">
                                 <i class="fa-brands fa-youtube"></i>
                                 <span>YouTube</span>
@@ -121,7 +185,7 @@
 
                 <!-- Submit Button -->
                 <button type="submit" id="submitBtn" class="primary-btn">
-                    <span class="btn-text">Process & Publish <i class="fa-solid fa-rocket"></i></span>
+                    <span class="btn-text">Brand Logo & Auto-Publish <i class="fa-solid fa-rocket"></i></span>
                     <span class="loader hidden"></span>
                 </button>
 
@@ -132,10 +196,10 @@
         <div class="card glass console hidden" id="console">
             <div class="console-header">
                 <i class="fa-solid fa-terminal"></i>
-                <span>Status Console</span>
+                <span>Execution Status</span>
             </div>
             <div class="console-body" id="consoleOutput">
-                <!-- Logs will be injected here -->
+                <!-- Logs injected here -->
             </div>
         </div>
     </main>

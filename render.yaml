@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: spikesignals-autoposter
+    env: python
+    rootDir: video_autoposter_agent
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ZERNIO_API_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: RAPIDAPI_INSTA_HOST
+        value: instagram-best-scraper-data-extractor-api.p.rapidapi.com
+      - key: RAPIDAPI_TIKTOK_HOST
+        value: scraptik.p.rapidapi.com
+      - key: OPENAI_API_KEY
+        sync: false
