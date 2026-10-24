@@ -207,13 +207,17 @@ async def fetch_and_publish(data: FetchAndPublishRequest, request: Request):
             except Exception as e:
                 results["tiktok"] = {"status": "error", "message": str(e)}
 
-        # 3. YouTube Upload natively via google-api-python-client
+        # 3. YouTube Upload (Zernio first, fallback to native)
         if "youtube" in data.platforms:
             try:
-                yt_res = native_youtube_upload(output_path, title, description)
-                results["youtube"] = {"status": "success", "result": f"Published natively. Video ID: {yt_res}"}
-            except Exception as e:
-                results["youtube"] = {"status": "error", "message": str(e)}
+                zernio_publish_video(output_path, f"{title}\n\n{description}", "youtube")
+                results["youtube"] = {"status": "success", "result": "Published to YouTube via Zernio"}
+            except Exception as z_err:
+                try:
+                    yt_res = native_youtube_upload(output_path, title, description)
+                    results["youtube"] = {"status": "success", "result": f"Published natively. Video ID: {yt_res}"}
+                except Exception as e:
+                    results["youtube"] = {"status": "error", "message": str(z_err)}
 
         return {
             "status": "success",
@@ -328,13 +332,17 @@ async def publish_all(data: PublishRequest, request: Request):
             except Exception as e:
                 results["tiktok"] = {"status": "error", "message": str(e)}
 
-        # 3. YouTube Upload natively via google-api-python-client
+        # 3. YouTube Upload (Zernio first, fallback to native)
         if "youtube" in data.platforms:
             try:
-                yt_res = native_youtube_upload(edited_video_path, data.title, data.description)
-                results["youtube"] = {"status": "success", "result": f"Published natively. Video ID: {yt_res}"}
-            except Exception as e:
-                results["youtube"] = {"status": "error", "message": str(e)}
+                zernio_publish_video(edited_video_path, f"{data.title}\n\n{data.description}", "youtube")
+                results["youtube"] = {"status": "success", "result": "Published to YouTube via Zernio"}
+            except Exception as z_err:
+                try:
+                    yt_res = native_youtube_upload(edited_video_path, data.title, data.description)
+                    results["youtube"] = {"status": "success", "result": f"Published natively. Video ID: {yt_res}"}
+                except Exception as e:
+                    results["youtube"] = {"status": "error", "message": str(z_err)}
 
         return {
             "status": "success",
