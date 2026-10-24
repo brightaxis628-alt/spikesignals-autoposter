@@ -64,14 +64,15 @@ def trending_videos():
     return {"status": "success", "message": "Zernio handles trending natively or we fetch from elsewhere later."}
 
 @app.get("/search-trending")
-def search_trending(query: str = "", platform: str = "youtube", max_results: int = 6):
+def search_trending(query: str = "", platform: str = "youtube", max_results: int = 6, offset: int = 0):
     """
     Searches trending/viral videos matching given keywords or topic across YouTube, Instagram, or TikTok.
     Returns thumbnails, titles, duration, platform tags, and URLs for the user to pick from.
+    Supports rotating offset for new videos on every search click.
     """
     try:
-        videos = search_trending_videos(keyword=query, platform=platform, max_results=max_results)
-        return {"status": "success", "count": len(videos), "platform": platform, "videos": videos}
+        videos = search_trending_videos(keyword=query, platform=platform, max_results=max_results, offset=offset)
+        return {"status": "success", "count": len(videos), "platform": platform, "offset": offset, "videos": videos}
     except Exception as e:
         return {"status": "error", "message": str(e), "videos": []}
 

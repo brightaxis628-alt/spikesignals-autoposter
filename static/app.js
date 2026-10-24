@@ -67,6 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMode = 'fetch'; // 'fetch' | 'upload' | 'ai'
     let selectedFile = null;
     let selectedVideoData = null;
+    let lastSearchQuery = null;
+    let lastSearchPlatform = null;
+    let currentSearchOffset = 0;
 
     // --- Mode Tab Switching ---
     modeTabs.forEach(tab => {
@@ -104,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    async function performSearch(showAlertOnEmpty = true) {
+    async function performSearch(fromUserClick = true) {
         const query = searchInput.value.trim();
 
         // Check if user entered a direct URL in search input
@@ -112,6 +115,18 @@ document.addEventListener('DOMContentLoaded', () => {
             videoUrlInput.value = query;
             handleDirectUrl(query);
             return;
+        }
+
+        const normalizedQuery = query.toLowerCase();
+        const normalizedPlatform = selectedPlatformSource.toLowerCase();
+
+        if (fromUserClick && normalizedQuery === lastSearchQuery && normalizedPlatform === lastSearchPlatform) {
+            // User clicked Fetch Trending again on the SAME topic -> Rotate to NEXT 6 fresh videos!
+            currentSearchOffset += 6;
+        } else {
+            lastSearchQuery = normalizedQuery;
+            lastSearchPlatform = normalizedPlatform;
+            currentSearchOffset = 0;
         }
 
         searchBtn.disabled = true;
@@ -128,7 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
 
         try {
-            const endpoint = `/search-trending?query=${encodeURIComponent(query)}&platform=${encodeURIComponent(selectedPlatformSource)}&max_results=8`;
+            const endpoint = `/search-trending?query=${encodeURIComponent(query)}&platform=${encodeURIComponent(selectedPlatformSource)}&max_results=6&offset=${currentSearchOffset}`;
             const res = await fetch(endpoint);
             const data = await res.json();
 
@@ -143,7 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            resultsCount.textContent = `Found ${data.videos.length} videos on ${platformName}`;
+            const batchNum = Math.floor(currentSearchOffset / 6) + 1;
+            resultsCount.innerHTML = `Found ${data.videos.length} videos on ${platformName} &bull; <span style="color:#a78bfa; font-weight: 500;">Batch #${batchNum} (click 'Fetch Trending' for next 6)</span>`;
             renderVideoCards(data.videos);
 
         } catch (err) {

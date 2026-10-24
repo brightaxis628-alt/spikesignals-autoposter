@@ -49,12 +49,26 @@ def sanitize_filename(name: str) -> str:
     return re.sub(r'[\\/*?:"<>|]', "", name)[:60].strip()
 
 
+def _slice_batch(items: List[Dict[str, Any]], max_results: int = 6, offset: int = 0) -> List[Dict[str, Any]]:
+    """
+    Slices items by offset to support rotating batches of fresh videos on each click.
+    """
+    total = len(items)
+    if total == 0:
+        return []
+    actual_offset = offset % total
+    batch = items[actual_offset : actual_offset + max_results]
+    if len(batch) < max_results and total > len(batch):
+        batch.extend(items[: max_results - len(batch)])
+    return batch[:max_results]
+
+
 # ---------------- PLATFORM-SPECIFIC SEARCHERS ----------------
 
-def _search_tiktok_rapidapi(keyword: str, max_results: int = 6) -> List[Dict[str, Any]]:
+def _search_tiktok_rapidapi(keyword: str, max_results: int = 6, offset: int = 0) -> List[Dict[str, Any]]:
     """
     Searches TikTok videos by keyword using RapidAPI ScrapTik.
-    Checks search_cache.json first to conserve quota.
+    Checks search_cache.json first to conserve quota and supports offset batching.
     """
     keyword_clean = keyword.strip()
     if not keyword_clean:
@@ -63,8 +77,8 @@ def _search_tiktok_rapidapi(keyword: str, max_results: int = 6) -> List[Dict[str
     cache_key = f"tiktok::{keyword_clean.lower()}"
     cached = _cache_get(cache_key)
     if cached:
-        print(f"[CACHE HIT] TikTok keyword: {keyword_clean}")
-        return cached[:max_results]
+        print(f"[CACHE HIT] TikTok keyword: {keyword_clean} (offset {offset})")
+        return _slice_batch(cached, max_results, offset)
 
     if not RAPIDAPI_KEY:
         print("[TIKTOK] No RAPIDAPI_KEY configured.")
@@ -117,7 +131,7 @@ def _search_tiktok_rapidapi(keyword: str, max_results: int = 6) -> List[Dict[str
 
             if results:
                 _cache_set(cache_key, results)
-            return results[:max_results]
+            return _slice_batch(results, max_results, offset)
         else:
             print(f"[TIKTOK API ERROR] HTTP {res.status_code}: {res.text[:120]}")
     except Exception as e:
@@ -126,11 +140,11 @@ def _search_tiktok_rapidapi(keyword: str, max_results: int = 6) -> List[Dict[str
     return []
 
 
-def _search_instagram_rapidapi(keyword: str, max_results: int = 6) -> List[Dict[str, Any]]:
+def _search_instagram_rapidapi(keyword: str, max_results: int = 6, offset: int = 0) -> List[Dict[str, Any]]:
     """
     Searches Instagram Reels by hashtag using RapidAPI 'Instagram Best Scraper'.
     Converts keyword to clean hashtag candidates (e.g. trade -> trading, stocks).
-    Checks cache first to save quota and guarantee ultra-fast response.
+    Checks cache first to save quota, guarantee ultra-fast response, and rotate batches.
     """
     raw_tag = re.sub(r"[^\w]", "", keyword.strip().lower().lstrip("#"))
     if not raw_tag or raw_tag in ("trade", "trader", "trades", "trading"):
@@ -143,15 +157,15 @@ def _search_instagram_rapidapi(keyword: str, max_results: int = 6) -> List[Dict[
     cache_key = f"instagram::{raw_tag}"
     cached = _cache_get(cache_key)
     if cached:
-        print(f"[CACHE HIT] Instagram hashtag: #{raw_tag}")
-        return cached[:max_results]
+        print(f"[CACHE HIT] Instagram hashtag: #{raw_tag} (offset {offset})")
+        return _slice_batch(cached, max_results, offset)
 
     # Check related high-affinity cache keys
     fallback_cache = _cache_get("instagram::trading") or _cache_get("instagram::market")
 
     if not RAPIDAPI_KEY:
         print("[INSTAGRAM] No RAPIDAPI_KEY configured; using verified Instagram cache.")
-        return fallback_cache[:max_results] if fallback_cache else []
+        return _slice_batch(fallback_cache, max_results, offset) if fallback_cache else []
 
     candidates = [raw_tag]
     if raw_tag.endswith("e"):
@@ -209,7 +223,7 @@ def _search_instagram_rapidapi(keyword: str, max_results: int = 6) -> List[Dict[
                     _cache_set(cache_key, results)
                     if tag != raw_tag:
                         _cache_set(f"instagram::{tag}", results)
-                    return results[:max_results]
+                    return _slice_batch(results, max_results, offset)
         except Exception as e:
             print(f"[INSTAGRAM API EXCEPTION for #{tag}] {e}")
             continue
@@ -217,25 +231,26 @@ def _search_instagram_rapidapi(keyword: str, max_results: int = 6) -> List[Dict[
     # Fallback to verified Instagram cache so user ALWAYS sees Instagram reels on Instagram tab
     if fallback_cache:
         print("[INSTAGRAM] Using verified Instagram cache fallback.")
-        return fallback_cache[:max_results]
+        return _slice_batch(fallback_cache, max_results, offset)
 
     return []
 
 
-def _search_youtube(keyword: str, max_results: int = 8) -> List[Dict[str, Any]]:
+def _search_youtube(keyword: str, max_results: int = 6, offset: int = 0) -> List[Dict[str, Any]]:
     """
     Searches YouTube for BOTH Short (<95s) and Long-form (>95s) content.
     Interleaves short-form clips and full-length videos for a complete discovery experience.
+    Supports offset batching so every click returns fresh videos.
     """
     kw = (keyword or "").strip()
     cache_key = f"youtube::{kw.lower()}"
     cached = _cache_get(cache_key)
     if cached:
-        print(f"[CACHE HIT] YouTube keyword: {kw}")
-        return cached[:max_results]
+        print(f"[CACHE HIT] YouTube keyword: {kw} (offset {offset})")
+        return _slice_batch(cached, max_results, offset)
 
-    kw_gen = f"ytsearch10:{kw}" if kw else "ytsearch10:trending viral videos"
-    kw_shorts = f"ytsearch10:{kw} #shorts" if kw else "ytsearch10:trending #shorts"
+    kw_gen = f"ytsearch15:{kw}" if kw else "ytsearch15:trending viral videos"
+    kw_shorts = f"ytsearch15:{kw} #shorts" if kw else "ytsearch15:trending #shorts"
 
     ydl_opts = {
         'quiet': True,
@@ -316,26 +331,25 @@ def _search_youtube(keyword: str, max_results: int = 8) -> List[Dict[str, Any]]:
     # Interleave: 1 short, 1 long for a balanced mix
     results = []
     s_i, l_i = 0, 0
-    while len(results) < max_results and (s_i < len(short_list) or l_i < len(long_list)):
+    while s_i < len(short_list) or l_i < len(long_list):
         if s_i < len(short_list):
             results.append(short_list[s_i])
             s_i += 1
-        if len(results) >= max_results:
-            break
         if l_i < len(long_list):
             results.append(long_list[l_i])
             l_i += 1
 
     if results:
         _cache_set(cache_key, results)
-    return results
+    return _slice_batch(results, max_results, offset)
 
 
 # ---------------- MAIN SEARCH FUNCTION ----------------
 
-def search_trending_videos(keyword: str = "", platform: str = "youtube", max_results: int = 6) -> list:
+def search_trending_videos(keyword: str = "", platform: str = "youtube", max_results: int = 6, offset: int = 0) -> list:
     """
     Searches for trending videos matching keyword tailored for the chosen platform.
+    Supports offset batching so every click returns fresh videos.
     - TikTok: ScrapTik RapidAPI (cached) with direct CDN mp4
     - Instagram: Instagram Best Scraper RapidAPI (cached) with direct CDN mp4
     - YouTube: Both Shorts & Long videos interleaved via yt-dlp
@@ -386,16 +400,16 @@ def search_trending_videos(keyword: str = "", platform: str = "youtube", max_res
             pass
 
     if platform == "tiktok":
-        results = _search_tiktok_rapidapi(keyword, max_results)
+        results = _search_tiktok_rapidapi(keyword, max_results, offset=offset)
         if results:
             return results
-        return _search_youtube(f"{keyword} tiktok", max_results)
+        return _search_youtube(f"{keyword} tiktok", max_results, offset=offset)
 
     elif platform == "instagram":
-        return _search_instagram_rapidapi(keyword, max_results)
+        return _search_instagram_rapidapi(keyword, max_results, offset=offset)
 
     else:
-        return _search_youtube(keyword, max_results)
+        return _search_youtube(keyword, max_results, offset=offset)
 
 
 # ---------------- DOWNLOAD HELPERS ----------------
