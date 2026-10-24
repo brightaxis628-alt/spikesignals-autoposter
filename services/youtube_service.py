@@ -1,4 +1,5 @@
 import os
+import base64
 import pickle
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -10,24 +11,41 @@ SCOPES = ['https://www.googleapis.com/auth/youtube.upload']
 
 def get_authenticated_service():
     creds = None
-    # The file token.pickle stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-            
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+
+    # 1. Try Environment Variable (For Render cloud deployment)
+    env_token = os.getenv("YOUTUBE_TOKEN_BASE64")
+    if env_token:
+        try:
+            creds = pickle.loads(base64.b64decode(env_token))
+        except Exception as e:
+            print(f"[YOUTUBE] Error loading token from YOUTUBE_TOKEN_BASE64: {e}")
+
+    # 2. Try local token.pickle file
+    if not creds and os.path.exists('token.pickle'):
+        try:
+            with open('token.pickle', 'rb') as token:
+                creds = pickle.load(token)
+        except Exception as e:
+            print(f"[YOUTUBE] Error loading token.pickle: {e}")
+
+    # 3. Refresh expired credentials
+    if creds and creds.expired and creds.refresh_token:
+        try:
             creds.refresh(Request())
-        else:
+        except Exception as e:
+            print(f"[YOUTUBE] Error refreshing token: {e}")
+            creds = None
+
+    # 4. If still invalid and running locally with display, run OAuth flow
+    if not creds or not creds.valid:
+        if os.path.exists('client_secret.json'):
             flow = InstalledAppFlow.from_client_secrets_file(
                 'client_secret.json', SCOPES)
             creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
+            with open('token.pickle', 'wb') as token:
+                pickle.dump(creds, token)
+        else:
+            raise Exception("No valid YouTube credentials found and client_secret.json is missing.")
 
     return build('youtube', 'v3', credentials=creds)
 

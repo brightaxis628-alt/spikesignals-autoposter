@@ -207,7 +207,7 @@ async def fetch_and_publish(data: FetchAndPublishRequest, request: Request):
             except Exception as e:
                 results["tiktok"] = {"status": "error", "message": str(e)}
 
-        # 3. YouTube Upload (Zernio first, fallback to native)
+        # 3. YouTube Upload (Zernio if connected, otherwise Native Google OAuth)
         if "youtube" in data.platforms:
             try:
                 zernio_publish_video(output_path, f"{title}\n\n{description}", "youtube")
@@ -215,9 +215,9 @@ async def fetch_and_publish(data: FetchAndPublishRequest, request: Request):
             except Exception as z_err:
                 try:
                     yt_res = native_youtube_upload(output_path, title, description)
-                    results["youtube"] = {"status": "success", "result": f"Published natively. Video ID: {yt_res}"}
+                    results["youtube"] = {"status": "success", "result": f"Published to YouTube natively. Video ID: {yt_res}"}
                 except Exception as e:
-                    results["youtube"] = {"status": "error", "message": str(z_err)}
+                    results["youtube"] = {"status": "error", "message": str(e)}
 
         return {
             "status": "success",
@@ -332,7 +332,7 @@ async def publish_all(data: PublishRequest, request: Request):
             except Exception as e:
                 results["tiktok"] = {"status": "error", "message": str(e)}
 
-        # 3. YouTube Upload (Zernio first, fallback to native)
+        # 3. YouTube Upload (Zernio if connected, otherwise Native Google OAuth)
         if "youtube" in data.platforms:
             try:
                 zernio_publish_video(edited_video_path, f"{data.title}\n\n{data.description}", "youtube")
@@ -340,9 +340,9 @@ async def publish_all(data: PublishRequest, request: Request):
             except Exception as z_err:
                 try:
                     yt_res = native_youtube_upload(edited_video_path, data.title, data.description)
-                    results["youtube"] = {"status": "success", "result": f"Published natively. Video ID: {yt_res}"}
+                    results["youtube"] = {"status": "success", "result": f"Published to YouTube natively. Video ID: {yt_res}"}
                 except Exception as e:
-                    results["youtube"] = {"status": "error", "message": str(z_err)}
+                    results["youtube"] = {"status": "error", "message": str(e)}
 
         return {
             "status": "success",
