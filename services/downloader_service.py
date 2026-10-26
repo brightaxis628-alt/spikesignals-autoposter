@@ -462,10 +462,49 @@ def _find_cached_direct_url(url: str) -> Optional[str]:
     return None
 
 
+def get_youtube_cookiefile() -> Optional[str]:
+    """
+    Finds or restores cookies.txt to authenticate yt-dlp on YouTube.
+    Bypasses datacenter bot blocks ('Sign in to confirm you're not a bot').
+    Sources checked:
+    1. Local cookies.txt file
+    2. YOUTUBE_COOKIES_BASE64 environment variable (Render env)
+    3. YOUTUBE_COOKIES raw string environment variable
+    """
+    cookie_file = "cookies.txt"
+    if os.path.exists(cookie_file) and os.path.getsize(cookie_file) > 10:
+        return cookie_file
+
+    b64_cookies = os.getenv("YOUTUBE_COOKIES_BASE64")
+    if b64_cookies:
+        try:
+            import base64
+            decoded = base64.b64decode(b64_cookies.strip()).decode("utf-8")
+            with open(cookie_file, "w", encoding="utf-8") as f:
+                f.write(decoded)
+            print("[YOUTUBE] Successfully created cookies.txt from YOUTUBE_COOKIES_BASE64")
+            return cookie_file
+        except Exception as e:
+            print(f"[YOUTUBE] Error decoding YOUTUBE_COOKIES_BASE64: {e}")
+
+    raw_cookies = os.getenv("YOUTUBE_COOKIES")
+    if raw_cookies:
+        try:
+            with open(cookie_file, "w", encoding="utf-8") as f:
+                f.write(raw_cookies)
+            print("[YOUTUBE] Successfully created cookies.txt from raw YOUTUBE_COOKIES")
+            return cookie_file
+        except Exception as e:
+            print(f"[YOUTUBE] Error writing raw YOUTUBE_COOKIES: {e}")
+
+    return None
+
+
 def download_video_from_url(url: str, output_dir: str = "uploads", direct_url: Optional[str] = None) -> dict:
     """
     Downloads a video from TikTok, Instagram, YouTube, or direct CDN stream.
     Prioritizes direct CDN streaming for TikTok and Instagram to avoid yt-dlp failures.
+    Uses mobile/iOS player client emulation + cookies for YouTube to bypass datacenter bot-checks.
     Returns metadata including local file path, title, description, and thumbnail.
     """
     os.makedirs(output_dir, exist_ok=True)
@@ -501,20 +540,31 @@ def download_video_from_url(url: str, output_dir: str = "uploads", direct_url: O
             }
         print("[DOWNLOAD] Direct stream download failed; falling back to yt-dlp.")
 
-    # Method 2: yt-dlp Download
+    # Method 2: yt-dlp Download with Mobile/iOS Extractor & Cookie Support
+    cookie_path = get_youtube_cookiefile()
     output_template = os.path.join(output_dir, f"dl_{unique_id}_%(title).50s.%(ext)s")
+
     ydl_opts = {
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'format': 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
         'outtmpl': output_template,
         'noplaylist': True,
         'quiet': False,
         'no_warnings': True,
         'merge_output_format': 'mp4',
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['ios', 'android', 'mweb'],
+                'player_skip': ['webpage', 'configs', 'js']
+            }
+        },
         'postprocessors': [{
             'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4',
         }],
     }
+    if cookie_path:
+        ydl_opts['cookiefile'] = cookie_path
+        print(f"[YOUTUBE] Using cookiefile: {cookie_path}")
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -549,12 +599,21 @@ def download_video_from_url(url: str, output_dir: str = "uploads", direct_url: O
             }
 
     except Exception as e:
+        print(f"[YOUTUBE] Standard yt-dlp download failed: {e}. Trying fallback mobile format...")
         fallback_opts = {
-            'format': 'best',
+            'format': 'worst[ext=mp4]/best[ext=mp4]/best',
             'outtmpl': os.path.join(output_dir, f"dl_{unique_id}_%(id)s.%(ext)s"),
             'noplaylist': True,
             'quiet': True,
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android', 'ios', 'mweb']
+                }
+            }
         }
+        if cookie_path:
+            fallback_opts['cookiefile'] = cookie_path
+
         try:
             with yt_dlp.YoutubeDL(fallback_opts) as ydl:
                 info = ydl.extract_info(url, download=True)

@@ -293,8 +293,8 @@ document.addEventListener('DOMContentLoaded', () => {
             selectedVideoLink.style.display = 'inline-flex';
         }
 
-        // Automake captions, title and hashtags
-        await autoMakeCopy(video.title, searchInput.value.trim());
+        // Automake captions, title and hashtags strictly based on video context
+        await autoMakeCopy(video.title, searchInput.value.trim(), video.description || "", video.uploader || "");
     }
 
     // Direct URL input listener
@@ -317,20 +317,27 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 3. AUTO-CRAFT CAPTIONS, TITLE & LINES ---
     regenerateCopyBtn.addEventListener('click', () => {
         const titleVal = titleInput.value.trim() || (selectedVideoData ? selectedVideoData.title : searchInput.value.trim());
-        autoMakeCopy(titleVal, searchInput.value.trim());
+        const descVal = selectedVideoData ? (selectedVideoData.description || "") : "";
+        const uploaderVal = selectedVideoData ? (selectedVideoData.uploader || "") : "";
+        autoMakeCopy(titleVal, searchInput.value.trim(), descVal, uploaderVal);
     });
 
-    async function autoMakeCopy(titleText, topicText = "") {
+    async function autoMakeCopy(titleText, topicText = "", descText = "", uploaderText = "") {
         if (!titleText) return;
 
         autoMakeAlert.classList.remove('hidden');
-        autoMakeAlert.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Auto-crafting viral lines & captions...`;
+        autoMakeAlert.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Auto-crafting content strictly based on video context...`;
 
         try {
             const res = await fetch('/auto-make-copy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: titleText, topic: topicText })
+                body: JSON.stringify({ 
+                    title: titleText, 
+                    topic: topicText,
+                    description: descText,
+                    uploader: uploaderText
+                })
             });
 
             const json = await res.json();
@@ -338,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 titleInput.value = json.data.title || titleText;
                 descInput.value = json.data.description || '';
                 captionInput.value = json.data.caption || '';
-                autoMakeAlert.innerHTML = `<i class="fa-solid fa-sparkles"></i> Lines, captions & hashtags automatically crafted!`;
+                autoMakeAlert.innerHTML = `<i class="fa-solid fa-sparkles"></i> Lines, captions & hashtags crafted based on video!`;
             }
         } catch (e) {
             console.error(e);

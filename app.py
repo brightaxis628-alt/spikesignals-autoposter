@@ -80,6 +80,8 @@ def search_trending(query: str = "", platform: str = "youtube", max_results: int
 class CopyRequest(BaseModel):
     title: str
     topic: Optional[str] = ""
+    description: Optional[str] = ""
+    uploader: Optional[str] = ""
 
 @app.post("/auto-make-copy")
 def auto_make_copy(data: CopyRequest):
@@ -88,7 +90,12 @@ def auto_make_copy(data: CopyRequest):
     and automatically crafts catchy viral headlines, description with hashtags, and IG caption.
     """
     try:
-        copy_data = generate_viral_copy(data.title, data.topic)
+        copy_data = generate_viral_copy(
+            data.title, 
+            data.topic or "", 
+            data.description or "", 
+            data.uploader or ""
+        )
         return {"status": "success", "data": copy_data}
     except Exception as e:
         return {"status": "error", "message": str(e)}
