@@ -123,9 +123,15 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
     Uses OpenAI if configured; otherwise runs high-precision contextual NLP generation.
     """
     raw_title = (title or "").strip()
-    clean_title = re.sub(r'[\s\|\-]+(by\s+)?([A-Z][a-zA-Z\s]+|Official.*|YouTube.*)$', '', raw_title).strip()
-    clean_title = re.sub(r'\[.*?\]|\(.*?\)', '', clean_title).strip()
-    if not clean_title:
+    clean_title = raw_title
+    if " | " in raw_title:
+        clean_title = raw_title.split(" | ")[0].strip()
+    elif uploader and f" - {uploader}" in raw_title:
+        clean_title = raw_title.replace(f" - {uploader}", "").strip()
+    
+    clean_title = re.sub(r'\[(Official|Music Video|HD|4K|Shorts|202\d).*?\]', '', clean_title, flags=re.IGNORECASE).strip()
+    clean_title = re.sub(r'\((Official|Music Video|HD|4K|Shorts|202\d).*?\)', '', clean_title, flags=re.IGNORECASE).strip()
+    if not clean_title or len(clean_title) < 4:
         clean_title = raw_title or "Trending Video"
 
     # 1. Try OpenAI if key is present
@@ -172,24 +178,27 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
             f"{punch_part}! 📊 ({lead_part})",
             f"{clean_title} 🚀 (Breakdown)",
             f"{lead_part} — {punch_part} 🔥",
-            f"Must-Watch: {clean_title} 💡"
+            f"Must-Watch: {clean_title} 💡",
+            f"Wait Till You See: {clean_title} ✨"
         ]
     elif len(parts) >= 2:
         title_candidates = [
             f"{lead_part}: {punch_part} 💡",
             f"Must-Watch: {clean_title} 🔥",
             f"{punch_part}! ({lead_part}) 📊",
-            f"{clean_title} 🚀"
+            f"{clean_title} 🚀",
+            f"The Real Truth Behind {clean_title} ⚡"
         ]
     else:
         title_candidates = [
             f"Must-Watch: {clean_title} 🔥",
             f"{clean_title} 💡 (Explained)",
             f"The Truth About {clean_title} 📊",
-            f"{clean_title} 🚀"
+            f"Why Everyone Is Watching: {clean_title} 🚀",
+            f"{clean_title} ✨"
         ]
 
-    chosen_title = title_candidates[0]
+    chosen_title = random.choice(title_candidates)
     if len(chosen_title) > 75:
         chosen_title = f"{clean_title[:68]}... 🚀"
 
@@ -197,21 +206,30 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
     words = re.findall(r'[a-zA-Z]{3,}', f"{clean_title} {topic}".lower())
     stop_words = {
         'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'only', 'ran', 
-        'through', 'video', 'watch', 'are', 'was', 'were', 'will', 'you', 'your', 'about'
+        'through', 'video', 'watch', 'are', 'was', 'were', 'will', 'you', 'your', 'about',
+        'what', 'when', 'where', 'which', 'who', 'how', 'why', 'can', 'could'
     }
     extracted_keywords = [w for w in words if w not in stop_words][:6]
     hashtags = [f"#{k}" for k in extracted_keywords]
 
-    # Add relevant niche community hashtags
+    # Add relevant niche community hashtags across all domains
     combined_ctx = f"{clean_title} {topic}".lower()
-    if any(k in combined_ctx for k in ['stock', 'ai', 'invest', 'trad', 'wealth', 'money', 'filter', 'crypto', 'market']):
-        hashtags.extend(['#investing', '#stocks', '#stockmarket', '#wealth', '#finance', '#financialfreedom'])
-    elif any(k in combined_ctx for k in ['tech', 'code', 'software', 'app', 'robot', 'future']):
-        hashtags.extend(['#technology', '#techtrends', '#futuretech', '#innovation', '#smarttech'])
-    elif any(k in combined_ctx for k in ['fitness', 'gym', 'workout', 'muscle', 'health']):
-        hashtags.extend(['#fitness', '#workout', '#gymlife', '#fitfam', '#healthylifestyle'])
+    if any(k in combined_ctx for k in ['stock', 'ai', 'invest', 'trad', 'wealth', 'money', 'filter', 'crypto', 'market', 'bitcoin', 'finance']):
+        hashtags.extend(['#investing', '#stocks', '#stockmarket', '#wealth', '#finance', '#financialfreedom', '#moneytips'])
+    elif any(k in combined_ctx for k in ['business', 'startup', 'entrepreneur', 'sales', 'marketing', 'agency', 'income', 'hustle']):
+        hashtags.extend(['#business', '#entrepreneurship', '#startuptips', '#marketing', '#successmindset', '#growth'])
+    elif any(k in combined_ctx for k in ['tech', 'code', 'software', 'app', 'robot', 'future', 'developer', 'hardware', 'cyber']):
+        hashtags.extend(['#technology', '#techtrends', '#futuretech', '#innovation', '#smarttech', '#coding'])
+    elif any(k in combined_ctx for k in ['fitness', 'gym', 'workout', 'muscle', 'health', 'diet', 'cardio', 'bodybuilding']):
+        hashtags.extend(['#fitness', '#workout', '#gymlife', '#fitfam', '#healthylifestyle', '#bodybuilding'])
+    elif any(k in combined_ctx for k in ['game', 'gaming', 'gamer', 'esports', 'playstation', 'xbox', 'nintendo', 'steam']):
+        hashtags.extend(['#gaming', '#gamer', '#gamersofig', '#gameplay', '#esports', '#gamingcommunity'])
+    elif any(k in combined_ctx for k in ['travel', 'trip', 'flight', 'destination', 'vacation', 'hotel']):
+        hashtags.extend(['#travel', '#wanderlust', '#exploretheworld', '#travelgram', '#vacationvibes'])
+    elif any(k in combined_ctx for k in ['food', 'recipe', 'cook', 'chef', 'kitchen', 'eat', 'dish', 'tasty']):
+        hashtags.extend(['#foodie', '#recipes', '#homecooking', '#tasty', '#foodlover', '#instafood'])
     else:
-        hashtags.extend(['#trending', '#viral', '#explore', '#mustwatch', '#viralvideo'])
+        hashtags.extend(['#trending', '#viral', '#explore', '#mustwatch', '#viralvideo', '#dailyviral'])
 
     unique_tags = list(dict.fromkeys(hashtags))
     desc_tags = " ".join(unique_tags[:8])
@@ -219,22 +237,42 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
 
     source_info = f" by {uploader}" if uploader and uploader != "YouTube Creator" else ""
 
-    # Meaningful description directly describing this video
-    description = (
-        f"Deep dive breakdown: {clean_title}{source_info}! "
-        f"Key takeaways and actionable insights you should know.\n\n"
-        f"{desc_tags}"
-    )
+    # Varied descriptions strictly focused on this video
+    desc_templates = [
+        f"Deep dive breakdown: {clean_title}{source_info}! Key takeaways, insights, and lessons you need to know.\n\n{desc_tags}",
+        f"Everything you need to know about {clean_title}{source_info}. Watch the full breakdown!\n\n{desc_tags}",
+        f"Breaking down: {clean_title}! An eye-opening look at this topic{source_info}. What are your thoughts?\n\n{desc_tags}"
+    ]
+    description = random.choice(desc_templates)
 
-    # Instagram caption with high-engagement hook referencing the exact topic
-    caption = (
-        f"What do you think about this? 👀👇\n\n"
-        f"💡 {clean_title}\n\n"
-        f"Would you agree with this breakdown? Drop your thoughts, favorite picks, or questions below!\n\n"
-        f"📌 Bookmark & save this reel for reference!\n"
-        f"👥 Share with someone who needs to see this!\n\n"
-        f"{caption_tags}"
-    )
+    # Varied Instagram captions with high-engagement hooks referencing the exact topic
+    caption_templates = [
+        (
+            f"What do you think about this? 👀👇\n\n"
+            f"💡 {clean_title}\n\n"
+            f"Would you agree with this breakdown? Drop your thoughts, favorite picks, or questions below!\n\n"
+            f"📌 Bookmark & save this reel for reference!\n"
+            f"👥 Share with someone who needs to see this!\n\n"
+            f"{caption_tags}"
+        ),
+        (
+            f"Did you know about this? 🤯⚡\n\n"
+            f"🔍 {clean_title}{source_info}\n\n"
+            f"Tag a friend who needs to see this insight! What is your biggest takeaway?\n\n"
+            f"💬 Let us know in the comments below! 👇\n"
+            f"📌 Save this post to revisit anytime.\n\n"
+            f"{caption_tags}"
+        ),
+        (
+            f"Wait till you see this! 🔥\n\n"
+            f"📊 {clean_title}\n\n"
+            f"Key insights and takeaways that everyone is talking about.\n\n"
+            f"👇 Drop a 'YES' if you agree or share your perspective!\n"
+            f"📌 Don't forget to bookmark and share this reel.\n\n"
+            f"{caption_tags}"
+        )
+    ]
+    caption = random.choice(caption_templates)
 
     return {
         "title": chosen_title,
