@@ -88,21 +88,36 @@ document.addEventListener('DOMContentLoaded', () => {
             tab.classList.add('active');
             currentMode = tab.getAttribute('data-mode');
 
-            fetchSection.classList.add('hidden');
-            uploadSection.classList.add('hidden');
-            aiSection.classList.add('hidden');
+            if (fetchSection) fetchSection.classList.add('hidden');
+            if (uploadSection) uploadSection.classList.add('hidden');
+            if (aiSection) aiSection.classList.add('hidden');
 
             if (currentMode === 'fetch') {
-                fetchSection.classList.remove('hidden');
-                detailsSection.classList.remove('hidden');
+                if (fetchSection) fetchSection.classList.remove('hidden');
+                if (detailsSection) detailsSection.classList.remove('hidden');
                 btnText.innerHTML = `Brand Logo & Auto-Publish <i class="fa-solid fa-rocket"></i>`;
+
+                // Preserve and restore selected video state
+                if (selectedVideoData && selectedVideoBanner) {
+                    selectedVideoBanner.classList.remove('hidden');
+                    if (selectedTitle) selectedTitle.textContent = selectedVideoData.title;
+                    if (selectedAuthor) selectedAuthor.textContent = `${selectedVideoData.uploader || 'Trending Creator'} • ${selectedVideoData.platform ? selectedVideoData.platform.toUpperCase() : 'VIDEO'}`;
+                    if (selectedThumb) selectedThumb.src = selectedVideoData.thumbnail || '';
+                    if (videoUrlInput) videoUrlInput.value = selectedVideoData.url;
+                }
             } else if (currentMode === 'upload') {
-                uploadSection.classList.remove('hidden');
-                detailsSection.classList.remove('hidden');
+                if (uploadSection) uploadSection.classList.remove('hidden');
+                if (detailsSection) detailsSection.classList.remove('hidden');
                 btnText.innerHTML = `Process & Publish <i class="fa-solid fa-rocket"></i>`;
+
+                // Clear or guide for manual upload
+                if (!selectedFile && autoMakeAlert) {
+                    autoMakeAlert.classList.remove('hidden');
+                    autoMakeAlert.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Upload your video above, enter a title, and click "Auto-Make Copy"!`;
+                }
             } else if (currentMode === 'ai') {
-                aiSection.classList.remove('hidden');
-                detailsSection.classList.add('hidden');
+                if (aiSection) aiSection.classList.remove('hidden');
+                if (detailsSection) detailsSection.classList.add('hidden');
                 btnText.innerHTML = `Generate & Publish <i class="fa-solid fa-wand-magic-sparkles"></i>`;
             }
         });
@@ -394,7 +409,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 dropZone.classList.add('hidden');
                 filePreview.classList.remove('hidden');
 
-                const cleanName = file.name.replace(/\.[^/.]+$/, "");
+                const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_\-]+/g, " ");
+                titleInput.value = cleanName;
+                if (autoMakeAlert) {
+                    autoMakeAlert.classList.remove('hidden');
+                    autoMakeAlert.innerHTML = `<i class="fa-solid fa-circle-check"></i> Video loaded: <strong>${file.name}</strong>. Enter or adjust your title below to auto-craft matching viral captions!`;
+                }
                 autoMakeCopy(cleanName);
             } else {
                 alert("Please select a valid MP4 or MOV video file.");
@@ -407,6 +427,13 @@ document.addEventListener('DOMContentLoaded', () => {
         fileInput.value = '';
         dropZone.classList.remove('hidden');
         filePreview.classList.add('hidden');
+        titleInput.value = '';
+        descInput.value = '';
+        captionInput.value = '';
+        if (autoMakeAlert) {
+            autoMakeAlert.classList.remove('hidden');
+            autoMakeAlert.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Upload your video above, enter a title, and click "Auto-Make Copy"!`;
+        }
     });
 
     // --- Watermark Position Selector ---
