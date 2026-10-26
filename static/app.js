@@ -409,11 +409,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 dropZone.classList.add('hidden');
                 filePreview.classList.remove('hidden');
 
-                const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[_\-]+/g, " ");
+                // Clean filename: remove extension, duration tags (_35s, _real, _final, _1080p), replace underscores and split CamelCase
+                let cleanName = file.name.replace(/\.[^/.]+$/, "");
+                cleanName = cleanName.replace(/[\_\-]+(real|\d+s|final|v\d+|\d+p|cut|edit).*$/i, "");
+                cleanName = cleanName.replace(/[_\-]+/g, " ");
+                cleanName = cleanName.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+
                 titleInput.value = cleanName;
                 if (autoMakeAlert) {
                     autoMakeAlert.classList.remove('hidden');
-                    autoMakeAlert.innerHTML = `<i class="fa-solid fa-circle-check"></i> Video loaded: <strong>${file.name}</strong>. Enter or adjust your title below to auto-craft matching viral captions!`;
+                    autoMakeAlert.innerHTML = `<i class="fa-solid fa-circle-check"></i> Video loaded: <strong>${file.name}</strong>. Auto-crafting professional copy...`;
                 }
                 autoMakeCopy(cleanName);
             } else {
