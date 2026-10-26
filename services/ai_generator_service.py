@@ -166,41 +166,103 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
         except Exception as e:
             print(f"[COPYWRITER] OpenAI API error/skip: {e}, using contextual NLP engine.")
 
-    # 2. CONTEXTUAL NLP COPYWRITING ENGINE (Derived directly from video title & topic)
+    # 2. CONTEXTUAL NLP REPHRASING ENGINE (Similar, NOT identical)
+    title_candidates = []
+
+    # Pattern 1: 'Why [Subject] [Verb] [Action]' (e.g. 'Why AI Stocks Are About To Rebound Fast')
+    m_why = re.match(r'^Why\s+(.+?)\s+(is|are|will|could|might)\s+(.+)$', clean_title, re.IGNORECASE)
+    if m_why:
+        subj = m_why.group(1).strip()
+        act = m_why.group(3).strip()
+        verb_agree = "Are" if (subj.lower().endswith('s') or " and " in subj.lower()) else "Is"
+        act_phrase = act
+        if 'rebound' in act.lower():
+            act_phrase = "Rally"
+        elif 'crash' in act.lower():
+            act_phrase = "Drop"
+        elif 'surge' in act.lower() or 'explode' in act.lower():
+            act_phrase = "Breakout"
+
+        title_candidates.extend([
+            f"The Massive {subj} {act_phrase} Nobody Sees Coming 📈",
+            f"Is A Huge {subj} Move Starting Right Now? 🚀",
+            f"What Most Investors Miss About The {subj} {act_phrase} 💡",
+            f"Get Ready: {subj} {verb_agree} Gearing Up For A Big Run ⚡",
+            f"The {subj} Reversal You Need To Watch 📊",
+            f"Why Smart Money Is Eyeing {subj} Right Now 🔥"
+        ])
+
+    # Pattern 2: 'How To [Action]' (e.g. 'How To Do A Perfect Pull-Up')
+    m_how = re.match(r'^How\s+To\s+(.+)$', clean_title, re.IGNORECASE)
+    if m_how:
+        act = m_how.group(1).strip()
+        title_candidates.extend([
+            f"The Smart Way To {act} (Step-By-Step) 💡",
+            f"Master {act}: Key Secrets Revealed 🚀",
+            f"Stop Doing It Wrong: How To Actually {act} ✨",
+            f"The Proven Blueprint To {act} 📈",
+            f"Everything You Need To Master {act} ⚡"
+        ])
+
+    # Pattern 3: 'I [Did X]... [Result]' (e.g. 'I Ran 28 AI Stocks Through My Filter. Only 5 Passed.')
+    m_i = re.match(r'^I\s+(.+?)\s*[\.\,\;\:\-]\s*(.+)$', clean_title, re.IGNORECASE)
+    if m_i:
+        did = m_i.group(1).strip()
+        outcome = m_i.group(2).strip()
+        title_candidates.extend([
+            f"{outcome}! (Testing {did}) 📊",
+            f"What Happened When I Tested: {did} 🚀",
+            f"The Shocking Result: {outcome} 💡",
+            f"Testing {did} — Here Are The Only Winners 🔥",
+            f"{outcome} After This Strict Test! ⚡"
+        ])
+
+    # Pattern 4: Numbers like '10 Things...' or '5 Habits...'
+    m_num = re.match(r'^(\d+)\s+(.+)$', clean_title, re.IGNORECASE)
+    if m_num:
+        num = m_num.group(1)
+        rest = m_num.group(2).strip()
+        title_candidates.extend([
+            f"The Top {num} {rest} You Need To Know 💡",
+            f"{num} Essential {rest} That Actually Work 🚀",
+            f"Ranking The {num} Best {rest} (Honest Review) 📊",
+            f"These {num} {rest} Change Everything 🔥",
+            f"Only {num} {rest} Worth Your Time ✨"
+        ])
+
+    # Pattern 5: Multi-part titles with punctuation
     parts = [p.strip() for p in re.split(r'[\.\:\!\?\|]', clean_title) if p.strip()]
-    lead_part = parts[0] if parts else clean_title
-    punch_part = parts[1] if len(parts) > 1 else parts[0]
-    numbers = re.findall(r'\b\d+\b', clean_title)
+    if not title_candidates and len(parts) >= 2:
+        lead, punch = parts[0], parts[1]
+        title_candidates.extend([
+            f"{punch}! ({lead}) 📊",
+            f"The Truth Behind {lead}: {punch} 💡",
+            f"{lead} — What You Need To Know 🚀",
+            f"Deep Dive: {lead} & {punch} ⚡",
+            f"What Nobody Told You About {lead} 🔥"
+        ])
 
-    # Dynamic viral titles maintaining 100% of the original video context
-    if len(parts) >= 2 and len(numbers) >= 2:
-        title_candidates = [
-            f"{punch_part}! 📊 ({lead_part})",
-            f"{clean_title} 🚀 (Breakdown)",
-            f"{lead_part} — {punch_part} 🔥",
-            f"Must-Watch: {clean_title} 💡",
-            f"Wait Till You See: {clean_title} ✨"
-        ]
-    elif len(parts) >= 2:
-        title_candidates = [
-            f"{lead_part}: {punch_part} 💡",
-            f"Must-Watch: {clean_title} 🔥",
-            f"{punch_part}! ({lead_part}) 📊",
-            f"{clean_title} 🚀",
-            f"The Real Truth Behind {clean_title} ⚡"
-        ]
-    else:
-        title_candidates = [
-            f"Must-Watch: {clean_title} 🔥",
-            f"{clean_title} 💡 (Explained)",
-            f"The Truth About {clean_title} 📊",
-            f"Why Everyone Is Watching: {clean_title} 🚀",
-            f"{clean_title} ✨"
-        ]
+    # Pattern 6: General Linguistic Rephrasing (Guaranteed similar, NEVER identical)
+    if not title_candidates:
+        title_candidates.extend([
+            f"The Untold Story Behind {clean_title} 💡",
+            f"What Most People Miss About {clean_title} 📊",
+            f"The Real Truth About {clean_title} ⚡",
+            f"Why Everyone Is Talking About {clean_title} 🚀",
+            f"Deep Dive Breakdown: {clean_title} 🔥"
+        ])
 
-    chosen_title = random.choice(title_candidates)
+    # Ensure NO candidate is identical to clean_title or raw_title
+    filtered = [
+        c for c in title_candidates 
+        if c.strip().lower() != clean_title.strip().lower() 
+        and c.strip().lower() != raw_title.strip().lower()
+        and c.strip().lower() != f"{clean_title.strip().lower()} ✨"
+    ]
+    chosen_title = random.choice(filtered if filtered else title_candidates)
+
     if len(chosen_title) > 75:
-        chosen_title = f"{clean_title[:68]}... 🚀"
+        chosen_title = f"{chosen_title[:70]}... 🚀"
 
     # Contextual keywords and hashtags derived directly from title words
     words = re.findall(r'[a-zA-Z]{3,}', f"{clean_title} {topic}".lower())
