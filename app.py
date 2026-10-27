@@ -47,9 +47,26 @@ def get_effective_base_url(custom_url: str = "", request: Request = None) -> str
         return str(request.base_url).rstrip('/')
     return "http://localhost:55570"
 
+@app.middleware("http")
+async def no_stale_frontend(request: Request, call_next):
+    """Make browsers re-check HTML/JS/CSS on every load so new deploys show up immediately."""
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".js", ".css", ".html")):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
 @app.get("/")
 def home():
-    return FileResponse("static/index.html")
+    """Serve the dashboard with version-stamped asset URLs (cache-busting after every deploy)."""
+    from fastapi.responses import HTMLResponse
+    with open("static/index.html", encoding="utf-8") as f:
+        html = f.read()
+    for asset in ("app.js", "style.css"):
+        path = os.path.join("static", asset)
+        version = int(os.path.getmtime(path)) if os.path.exists(path) else 0
+        html = html.replace(f"/static/{asset}\"", f"/static/{asset}?v={version}\"")
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache, must-revalidate"})
 
 @app.get("/health")
 def health_check():

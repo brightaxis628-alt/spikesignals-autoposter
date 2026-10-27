@@ -97,6 +97,18 @@ document.addEventListener('DOMContentLoaded', () => {
         caption: ''
     };
 
+    const TRENDING_HINT = `<i class="fa-solid fa-hand-pointer"></i> Search & select a trending video above (or paste a link) — title, description & caption are auto-crafted from it.`;
+    const MANUAL_HINT = `<i class="fa-solid fa-cloud-arrow-up"></i> Drop a video file above — title, description & caption are auto-crafted from the video.`;
+
+    function showModeHint(mode) {
+        if (!autoMakeAlert) return;
+        autoMakeAlert.classList.remove('hidden');
+        autoMakeAlert.innerHTML = mode === 'upload' ? MANUAL_HINT : TRENDING_HINT;
+    }
+
+    // Initial state on page load: Trending tab guidance (never upload wording)
+    showModeHint('fetch');
+
     // --- Mode Tab Switching ---
     modeTabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -149,7 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (titleInput) { titleInput.value = trendingState.title || ''; titleInput.placeholder = 'Catchy title for YouTube & TikTok...'; }
                     if (descInput) descInput.value = trendingState.desc || '';
                     if (captionInput) captionInput.value = trendingState.caption || '';
-                    if (autoMakeAlert) autoMakeAlert.classList.add('hidden');
+                    showModeHint('fetch');
                 }
             } else if (currentMode === 'upload') {
                 if (uploadSection) uploadSection.classList.remove('hidden');
@@ -185,10 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         captionInput.value = '';
                         captionInput.placeholder = 'Instagram caption with hooks and hashtags will appear here...';
                     }
-                    if (autoMakeAlert) {
-                        autoMakeAlert.classList.remove('hidden');
-                        autoMakeAlert.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Drop a video file above to auto-craft copy!`;
-                    }
+                    showModeHint('upload');
                 }
             } else if (currentMode === 'ai') {
                 if (aiSection) aiSection.classList.remove('hidden');
@@ -624,10 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
         titleInput.value = '';
         descInput.value = '';
         captionInput.value = '';
-        if (autoMakeAlert) {
-            autoMakeAlert.classList.remove('hidden');
-            autoMakeAlert.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Upload your video above, enter a title, and click "Auto-Make Copy"!`;
-        }
+        showModeHint(currentMode);
     });
 
     // --- Watermark Position Selector ---
