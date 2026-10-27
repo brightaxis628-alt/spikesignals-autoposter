@@ -81,9 +81,39 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastSearchPlatform = null;
     let currentSearchOffset = 0;
 
+    // Distinct isolated states for each mode so Manual Upload NEVER leaks Trending content
+    let trendingState = {
+        videoData: null,
+        title: '',
+        desc: '',
+        caption: '',
+        videoUrl: ''
+    };
+
+    let manualState = {
+        file: null,
+        title: '',
+        desc: '',
+        caption: ''
+    };
+
     // --- Mode Tab Switching ---
     modeTabs.forEach(tab => {
         tab.addEventListener('click', () => {
+            // 1. Save current active mode's inputs before switching
+            if (currentMode === 'fetch') {
+                trendingState.title = titleInput ? titleInput.value : '';
+                trendingState.desc = descInput ? descInput.value : '';
+                trendingState.caption = captionInput ? captionInput.value : '';
+                trendingState.videoUrl = videoUrlInput ? videoUrlInput.value : '';
+                trendingState.videoData = selectedVideoData;
+            } else if (currentMode === 'upload') {
+                manualState.title = titleInput ? titleInput.value : '';
+                manualState.desc = descInput ? descInput.value : '';
+                manualState.caption = captionInput ? captionInput.value : '';
+                manualState.file = selectedFile;
+            }
+
             modeTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             currentMode = tab.getAttribute('data-mode');
@@ -97,23 +127,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (detailsSection) detailsSection.classList.remove('hidden');
                 btnText.innerHTML = `Brand Logo & Auto-Publish <i class="fa-solid fa-rocket"></i>`;
 
-                // Preserve and restore selected video state
-                if (selectedVideoData && selectedVideoBanner) {
+                // Restore trending state
+                if (trendingState.videoData && selectedVideoBanner) {
+                    selectedVideoData = trendingState.videoData;
                     selectedVideoBanner.classList.remove('hidden');
-                    if (selectedTitle) selectedTitle.textContent = selectedVideoData.title;
-                    if (selectedAuthor) selectedAuthor.textContent = `${selectedVideoData.uploader || 'Trending Creator'} • ${selectedVideoData.platform ? selectedVideoData.platform.toUpperCase() : 'VIDEO'}`;
-                    if (selectedThumb) selectedThumb.src = selectedVideoData.thumbnail || '';
-                    if (videoUrlInput) videoUrlInput.value = selectedVideoData.url;
+                    if (selectedTitle) selectedTitle.textContent = trendingState.videoData.title;
+                    if (selectedAuthor) selectedAuthor.textContent = `${trendingState.videoData.uploader || 'Trending Creator'} • ${trendingState.videoData.platform ? trendingState.videoData.platform.toUpperCase() : 'VIDEO'}`;
+                    if (selectedThumb) selectedThumb.src = trendingState.videoData.thumbnail || '';
+                    if (videoUrlInput) videoUrlInput.value = trendingState.videoUrl || trendingState.videoData.url;
+                    if (titleInput) titleInput.value = trendingState.title;
+                    if (descInput) descInput.value = trendingState.desc;
+                    if (captionInput) captionInput.value = trendingState.caption;
+                    if (autoMakeAlert) {
+                        autoMakeAlert.classList.remove('hidden');
+                        autoMakeAlert.innerHTML = `<i class="fa-solid fa-sparkles"></i> Lines, captions & hashtags crafted based on video!`;
+                    }
+                } else {
+                    if (selectedVideoBanner) selectedVideoBanner.classList.add('hidden');
+                    if (videoUrlInput) videoUrlInput.value = '';
+                    if (titleInput) titleInput.value = '';
+                    if (descInput) descInput.value = '';
+                    if (captionInput) captionInput.value = '';
+                    if (autoMakeAlert) autoMakeAlert.classList.add('hidden');
                 }
             } else if (currentMode === 'upload') {
                 if (uploadSection) uploadSection.classList.remove('hidden');
                 if (detailsSection) detailsSection.classList.remove('hidden');
                 btnText.innerHTML = `Process & Publish <i class="fa-solid fa-rocket"></i>`;
 
-                // Clear or guide for manual upload
-                if (!selectedFile && autoMakeAlert) {
-                    autoMakeAlert.classList.remove('hidden');
-                    autoMakeAlert.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Upload your video above, enter a title, and click "Auto-Make Copy"!`;
+                // Clean state for manual upload - NEVER show trending video content!
+                if (manualState.file) {
+                    selectedFile = manualState.file;
+                    if (filePreview) filePreview.classList.remove('hidden');
+                    if (dropZone) dropZone.classList.add('hidden');
+                    if (fileName) fileName.textContent = manualState.file.name;
+                    if (titleInput) titleInput.value = manualState.title;
+                    if (descInput) descInput.value = manualState.desc;
+                    if (captionInput) captionInput.value = manualState.caption;
+                    if (autoMakeAlert) {
+                        autoMakeAlert.classList.remove('hidden');
+                        autoMakeAlert.innerHTML = `<i class="fa-solid fa-circle-check"></i> Video loaded: <strong>${escapeHtml(manualState.file.name)}</strong>.`;
+                    }
+                } else {
+                    selectedFile = null;
+                    if (filePreview) filePreview.classList.add('hidden');
+                    if (dropZone) dropZone.classList.remove('hidden');
+                    if (titleInput) {
+                        titleInput.value = '';
+                        titleInput.placeholder = 'Enter video title or drop a file above to auto-craft copy...';
+                    }
+                    if (descInput) {
+                        descInput.value = '';
+                        descInput.placeholder = 'YouTube & TikTok description with hashtags will appear here...';
+                    }
+                    if (captionInput) {
+                        captionInput.value = '';
+                        captionInput.placeholder = 'Instagram caption with hooks and hashtags will appear here...';
+                    }
+                    if (autoMakeAlert) {
+                        autoMakeAlert.classList.remove('hidden');
+                        autoMakeAlert.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Drop a video file above to auto-craft copy!`;
+                    }
                 }
             } else if (currentMode === 'ai') {
                 if (aiSection) aiSection.classList.remove('hidden');
@@ -483,6 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     removeBtn.addEventListener('click', () => {
         selectedFile = null;
+        manualState = { file: null, title: '', desc: '', caption: '' };
         fileInput.value = '';
         dropZone.classList.remove('hidden');
         filePreview.classList.add('hidden');

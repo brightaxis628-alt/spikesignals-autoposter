@@ -239,6 +239,45 @@ def generate_kling_video(prompt: str, platform: str) -> str:
 
     return output_filename
 
+def rephrase_with_ai(title: str, topic: str = "", uploader: str = "") -> Optional[dict]:
+    """
+    Intelligently rewrites and rephrases any video title stating the exact same topic
+    in a fresh, punchy, viral, and 100% complete way using the AI model.
+    """
+    client, model = get_ai_client()
+    if not client:
+        return None
+
+    try:
+        prompt = (
+            f"You are an elite viral social media copywriter for YouTube Shorts, TikTok, and Instagram Reels.\n"
+            f"Original Video Title: \"{title}\".\n"
+            f"Topic: {topic or 'general'}. Channel/Creator: {uploader or 'creator'}.\n\n"
+            "TASK: Rephrase and rewrite the title stating the EXACT SAME core topic/message, but in a fresh, punchy, viral, and complete way.\n\n"
+            "CRITICAL RULES:\n"
+            "1. 'title': Must be a 100% COMPLETE sentence or phrase (between 40 and 65 characters) with 1 fitting emoji at the end.\n"
+            "   - NEVER cut off words. NEVER use ellipses like 'Rig...'.\n"
+            "   - NEVER use lazy prefix wrappers like 'The Real Truth Behind [entire original sentence]'.\n"
+            "   - It must state the same topic/hook as the original, but rewritten to maximize curiosity and clicks.\n"
+            "2. 'description': An engaging 2-sentence description summarizing the insights, followed by 6-8 relevant hashtags.\n"
+            "3. 'caption': A high-converting Instagram caption with a strong hook, 3 bulleted takeaways/observations, an engaging question prompting comments, and 12-15 targeted hashtags.\n\n"
+            "Return ONLY a valid JSON object with keys: 'title', 'description', 'caption'."
+        )
+
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(resp.choices[0].message.content)
+        if "title" in data and "description" in data and "caption" in data:
+            data["analyzed_from"] = "ai_rephrase"
+            return data
+    except Exception as e:
+        print(f"AI Rephrase Error: {e}")
+
+    return None
+
 def generate_viral_copy(
     title: str,
     topic: str = "",
@@ -249,8 +288,8 @@ def generate_viral_copy(
     """
     Context-aware viral copy generator.
     1. If video_path is provided and exists on disk, runs Multimodal AI Vision analysis to see inside the video.
-    2. Purifies generic filenames, phone exports (WhatsApp Video, VID_, IMG_, timestamps), and Instagram CTAs.
-    3. Crafts customized viral titles, YouTube/TikTok descriptions, and Instagram captions.
+    2. Rewrites titles intelligently using AI so they state the same topic in a catchy, 100% complete way.
+    3. Purifies generic filenames, phone exports (WhatsApp Video, VID_, IMG_, timestamps), and Instagram CTAs.
     """
     # 1. Check if we have an actual video file on disk to inspect with Vision AI
     if video_path and os.path.exists(video_path):
@@ -312,6 +351,12 @@ def generate_viral_copy(
             clean_title = "Breakthrough AI & Next-Gen Technology Insights"
         else:
             clean_title = "High-Probability Market Setup & Trading Strategy"
+
+    # 5. REPHRASE INTELLIGENTLY VIA AI MODEL (IF NOT SPECIAL COMPANY/CTA)
+    if not is_spikesignals and not is_cta and not is_generic_export:
+        ai_res = rephrase_with_ai(clean_title, topic=topic, uploader=uploader)
+        if ai_res:
+            return ai_res
 
     is_trading = is_spikesignals or is_cta or any(k in combined_ctx for k in ['trad', 'stock', 'invest', 'forex', 'crypto', 'wealth', 'market', 'filter', 'chart', 'profit'])
     is_tech = any(k in combined_ctx for k in ['ai', 'tech', 'software', 'app', 'code', 'future', 'robot'])
@@ -409,7 +454,18 @@ def generate_viral_copy(
     filtered = [c for c in title_candidates if c.strip().lower() != raw_title.strip().lower()]
     chosen_title = random.choice(filtered if filtered else title_candidates)
     if len(chosen_title) > 75:
-        chosen_title = f"{chosen_title[:70]}... 🚀"
+        # Truncate strictly at word boundaries so words are never sliced mid-sentence
+        words = chosen_title.split()
+        shortened = []
+        cur_len = 0
+        for w in words:
+            if cur_len + len(w) + 1 > 65:
+                break
+            shortened.append(w)
+            cur_len += len(w) + 1
+        chosen_title = " ".join(shortened)
+        if not re.search(r'[\U00010000-\U0010ffff\u2600-\u27ff]$', chosen_title):
+            chosen_title += " 🚀"
 
     # 6. EXTRACT KEYWORDS & HASHTAGS (Banning phone export junk)
     words = re.findall(r'[a-zA-Z]{3,}', f"{clean_title} {topic}".lower())
