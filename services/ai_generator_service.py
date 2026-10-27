@@ -50,65 +50,53 @@ def get_video_duration(video_path: str) -> float:
     except Exception:
         return 5.0
 
-def analyze_visual_content(
-    video_path: Optional[str] = None,
-    image_url: Optional[str] = None,
-    hint_topic: str = "trading"
-) -> Optional[dict]:
+def analyze_video_frames(video_path: str, hint_topic: str = "trading") -> Optional[dict]:
     """
-    Multimodal Visual Analyzer:
-    1. If a video file exists on disk, extracts 3 keyframes across duration.
-    2. If an image_url is provided (e.g. YouTube/TikTok/Instagram thumbnail), analyzes it directly.
-    3. The Multimodal AI model inspects the visual footage/scenes and generates viral copy based on what is shown.
+    Extracts 2-3 key frames from a downloaded/uploaded video file on disk
+    and passes them to Multimodal AI Vision to inspect the actual scenes.
     """
+    if not video_path or not os.path.exists(video_path):
+        return None
+
     client, model = get_ai_client()
     if not client:
         return None
 
-    images = []
+    ffmpeg_bin = get_ffmpeg_exe()
+    dur = get_video_duration(video_path)
+    timestamps = [max(0.5, dur * 0.15), max(1.0, dur * 0.5), max(1.5, dur * 0.8)]
+
     temp_frames = []
+    images = []
 
-    # 1. Extract frames from video if local file exists
-    if video_path and os.path.exists(video_path):
-        ffmpeg_bin = get_ffmpeg_exe()
-        dur = get_video_duration(video_path)
-        timestamps = [max(0.5, dur * 0.15), max(1.0, dur * 0.5), max(1.5, dur * 0.8)]
+    pid = os.getpid()
+    rnd = int(time.time() * 1000) % 100000
 
-        pid = os.getpid()
-        rnd = int(time.time() * 1000) % 100000
-
-        for i, ts in enumerate(timestamps):
-            out_f = f"temp_vframe_{pid}_{rnd}_{i}.jpg"
-            cmd = [
-                ffmpeg_bin, "-y", "-ss", str(ts), "-i", video_path,
-                "-frames:v", "1", "-vf", "scale=640:-1", "-q:v", "3", out_f
-            ]
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if os.path.exists(out_f):
-                temp_frames.append(out_f)
-                try:
-                    with open(out_f, "rb") as f:
-                        b64 = base64.b64encode(f.read()).decode("utf-8")
-                        images.append({
-                            "type": "image_url",
-                            "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
-                        })
-                except Exception as e:
-                    print(f"Error reading frame {out_f}: {e}")
-
-        for f in temp_frames:
+    for i, ts in enumerate(timestamps):
+        out_f = f"temp_vframe_{pid}_{rnd}_{i}.jpg"
+        cmd = [
+            ffmpeg_bin, "-y", "-ss", str(ts), "-i", video_path,
+            "-frames:v", "1", "-vf", "scale=640:-1", "-q:v", "3", out_f
+        ]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.path.exists(out_f):
+            temp_frames.append(out_f)
             try:
-                if os.path.exists(f):
-                    os.remove(f)
-            except Exception:
-                pass
+                with open(out_f, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                    images.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                    })
+            except Exception as e:
+                print(f"Error reading frame {out_f}: {e}")
 
-    # 2. If no video frames but image_url (thumbnail) is provided, use thumbnail image
-    if not images and image_url and image_url.startswith("http"):
-        images.append({
-            "type": "image_url",
-            "image_url": {"url": image_url}
-        })
+    for f in temp_frames:
+        try:
+            if os.path.exists(f):
+                os.remove(f)
+        except Exception:
+            pass
 
     if not images:
         return None
@@ -117,7 +105,7 @@ def analyze_visual_content(
 
     prompt = (
         "You are an elite viral social media copywriter and growth strategist for TikTok, Instagram Reels, and YouTube Shorts.\n"
-        "Look at these actual video visual scenes/frames and inspect what is happening inside the video (scene, action, subject, charts, text overlays, emotions, environment).\n"
+        "Look at these actual video visual frames and inspect what is happening inside the video (scene, action, subject, charts, text overlays, emotions, environment).\n"
         f"{topic_instruction}\n\n"
         "CRITICAL RULES:\n"
         "1. NEVER mention raw filenames, file extensions (.mp4), device names, camera tags, or timestamps (e.g. NEVER use words like 'WhatsApp Video', 'VID_', 'IMG_', 'Screen Recording', '2026-10-22', 'at 20.39.55').\n"
@@ -147,8 +135,8 @@ def analyze_visual_content(
 
     return None
 
-def analyze_video_frames(video_path: str, hint_topic: str = "trading") -> Optional[dict]:
-    return analyze_visual_content(video_path=video_path, hint_topic=hint_topic)
+def analyze_visual_content(video_path: Optional[str] = None, image_url: Optional[str] = None, hint_topic: str = "trading") -> Optional[dict]:
+    return analyze_video_frames(video_path, hint_topic=hint_topic)
 
 def generate_video_prompts(search_heading: str) -> dict:
     """
@@ -256,18 +244,17 @@ def generate_viral_copy(
     topic: str = "",
     original_desc: str = "",
     uploader: str = "",
-    video_path: Optional[str] = None,
-    image_url: Optional[str] = None
+    video_path: Optional[str] = None
 ) -> dict:
     """
     Context-aware viral copy generator.
-    1. If video_path exists or image_url is provided, runs Multimodal AI Vision analysis to see inside the video.
+    1. If video_path is provided and exists on disk, runs Multimodal AI Vision analysis to see inside the video.
     2. Purifies generic filenames, phone exports (WhatsApp Video, VID_, IMG_, timestamps), and Instagram CTAs.
     3. Crafts customized viral titles, YouTube/TikTok descriptions, and Instagram captions.
     """
-    # 1. Check if we have an actual video file or visual scene/thumbnail to inspect with Vision AI
-    if (video_path and os.path.exists(video_path)) or (image_url and str(image_url).startswith("http")):
-        vision_result = analyze_visual_content(video_path=video_path, image_url=image_url, hint_topic=topic)
+    # 1. Check if we have an actual video file on disk to inspect with Vision AI
+    if video_path and os.path.exists(video_path):
+        vision_result = analyze_video_frames(video_path, hint_topic=topic)
         if vision_result:
             return vision_result
 
@@ -277,8 +264,9 @@ def generate_viral_copy(
     # 2. Check if the title is a raw camera/phone/WhatsApp export
     is_generic_export = bool(GENERIC_CAMERA_PATTERN.search(t))
 
-    # Strip leading emojis & decorative symbols
-    t = re.sub(r'^[\U00010000-\U0010ffff\u2600-\u27ff\u200d\s\💭\👇\🔥\🚀\📈\💡\⚡\📊\✨]+', '', t).strip()
+    # Strip leading & trailing emojis & decorative symbols
+    t = re.sub(r'^[\U00010000-\U0010ffff\u2600-\u27ff\u200d\s\💭\👇\🔥\🚀\📈\💡\⚡\📊\✨\💗\🧿]+', '', t).strip()
+    t = re.sub(r'[\U00010000-\U0010ffff\u2600-\u27ff\u200d\s\💭\👇\🔥\🚀\📈\💡\⚡\📊\✨\💗\🧿]+$', '', t).strip()
 
     # Normalize and clean uploaded filenames (e.g. SpikeSignals_CompletePicture_Real_35s.mp4)
     is_filename = '_' in t or t.endswith('.mp4') or re.search(r'\b\d+s\b', t, re.IGNORECASE)

@@ -301,23 +301,15 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedAuthor.textContent = `${video.uploader || 'Trending Creator'} • ${video.platform ? video.platform.toUpperCase() : 'VIDEO'}`;
         selectedVideoBanner.classList.remove('hidden');
 
-        // Update Inspect Button & Watch Link Button
-        const inspectSelectedVideoBtn = document.getElementById('inspectSelectedVideoBtn');
-        if (inspectSelectedVideoBtn) {
-            inspectSelectedVideoBtn.style.display = 'inline-flex';
-            inspectSelectedVideoBtn.onclick = () => {
-                autoMakeCopy(video.title, searchInput.value.trim(), video.description || "", video.uploader || "", "", video.thumbnail || "");
-            };
-        }
-
+        // Update Watch Link Button
         const selectedVideoLink = document.getElementById('selectedVideoLink');
         if (selectedVideoLink) {
             selectedVideoLink.href = video.url;
             selectedVideoLink.style.display = 'inline-flex';
         }
 
-        // Automake captions, title and hashtags based on visual scenes + video context
-        await autoMakeCopy(video.title, searchInput.value.trim(), video.description || "", video.uploader || "", "", video.thumbnail || "");
+        // Automake captions, title and hashtags strictly based on video context
+        await autoMakeCopy(video.title, searchInput.value.trim(), video.description || "", video.uploader || "");
     }
 
     // Direct URL input listener
@@ -360,8 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     topic: topicText,
                     description: descText,
                     uploader: uploaderText,
-                    video_filename: videoFilename || (selectedFile ? selectedFile.name : ""),
-                    image_url: imageUrl || (selectedVideoData ? selectedVideoData.thumbnail : "")
+                    video_filename: videoFilename || (selectedFile ? selectedFile.name : "")
                 })
             });
 
@@ -375,8 +366,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (e) {
             console.error(e);
             titleInput.value = titleText;
-            descInput.value = `${titleText}\n\n#trending #shorts #viral`;
-            captionInput.value = `Wait till the end! 🔥\n\n${titleText}\n\n#reels #viral #explore`;
+            descInput.value = `Comprehensive breakdown: ${titleText}. Exploring key market trends and strategies.\n\n#trending #viral #explore #strategy`;
+            captionInput.value = `What are your thoughts on this? 👀👇\n\n💡 Key Takeaways from ${titleText}:\n• Understand the core breakdown\n• Focus on high-probability execution\n\n💬 Drop your opinion below!\n📌 Save & share this reel!`;
             autoMakeAlert.classList.add('hidden');
         }
     }

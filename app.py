@@ -84,15 +84,13 @@ class CopyRequest(BaseModel):
     uploader: Optional[str] = ""
     video_filename: Optional[str] = ""
     video_path: Optional[str] = ""
-    image_url: Optional[str] = ""
 
 @app.post("/auto-make-copy")
 def auto_make_copy(data: CopyRequest):
     """
     Automated copy generator: Takes the selected video title and context,
     and automatically crafts catchy viral headlines, description with hashtags, and IG caption.
-    If a video file exists, uses Multimodal AI to inspect actual video frames.
-    If an image_url/thumbnail is provided, inspects the visual thumbnail scene with AI.
+    If a downloaded/uploaded video file exists on disk, uses Multimodal AI to inspect actual video frames.
     """
     try:
         resolved_video_path = None
@@ -115,8 +113,7 @@ def auto_make_copy(data: CopyRequest):
             data.topic or "", 
             data.description or "", 
             data.uploader or "",
-            video_path=resolved_video_path,
-            image_url=data.image_url or ""
+            video_path=resolved_video_path
         )
         return {"status": "success", "data": copy_data}
     except Exception as e:
