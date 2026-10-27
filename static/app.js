@@ -143,11 +143,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         autoMakeAlert.innerHTML = `<i class="fa-solid fa-sparkles"></i> Lines, captions & hashtags crafted based on video!`;
                     }
                 } else {
+                    selectedVideoData = null;
                     if (selectedVideoBanner) selectedVideoBanner.classList.add('hidden');
-                    if (videoUrlInput) videoUrlInput.value = '';
-                    if (titleInput) titleInput.value = '';
-                    if (descInput) descInput.value = '';
-                    if (captionInput) captionInput.value = '';
+                    if (videoUrlInput) videoUrlInput.value = trendingState.videoUrl || '';
+                    if (titleInput) { titleInput.value = trendingState.title || ''; titleInput.placeholder = 'Catchy title for YouTube & TikTok...'; }
+                    if (descInput) descInput.value = trendingState.desc || '';
+                    if (captionInput) captionInput.value = trendingState.caption || '';
                     if (autoMakeAlert) autoMakeAlert.classList.add('hidden');
                 }
             } else if (currentMode === 'upload') {
@@ -395,24 +396,80 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function handleDirectUrl(url) {
-        selectedThumb.src = 'https://via.placeholder.com/120x80?text=Direct+Video';
-        selectedTitle.textContent = "Direct Video Link";
+        selectedThumb.src = '';
+        selectedTitle.textContent = "Reading video details...";
         selectedAuthor.textContent = url;
         selectedVideoBanner.classList.remove('hidden');
+        if (autoMakeAlert) {
+            autoMakeAlert.classList.remove('hidden');
+            autoMakeAlert.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Reading the original video title from the link...`;
+        }
 
-        await autoMakeCopy("Trending Viral Video", searchInput.value.trim());
+        // Look up the real title / uploader of the pasted link so copy is based on the actual video
+        try {
+            const platformGuess = url.includes('instagram.com') ? 'instagram' : (url.includes('tiktok.com') ? 'tiktok' : 'youtube');
+            const res = await fetch(`/search-trending?query=${encodeURIComponent(url)}&platform=${platformGuess}&max_results=1`);
+            const json = await res.json();
+            if (json.status === 'success' && json.videos && json.videos.length > 0) {
+                const info = json.videos[0];
+                info.url = info.url || url;
+                await selectVideo(info);
+                return;
+            }
+        } catch (e) {
+            console.warn('Direct URL lookup failed:', e);
+        }
+
+        // Could not read metadata: keep link, ask user for a title instead of inventing generic copy
+        selectedVideoData = { url: url, title: '', uploader: '', platform: '' };
+        selectedTitle.textContent = "Direct Video Link";
+        titleInput.value = '';
+        descInput.value = '';
+        captionInput.value = '';
+        titleInput.placeholder = 'Could not read the video title - type the topic/title here, then click "Auto-Make Copy"';
+        if (autoMakeAlert) {
+            autoMakeAlert.classList.remove('hidden');
+            autoMakeAlert.innerHTML = `<i class="fa-solid fa-circle-info"></i> Type the video title above and click "Auto-Make Copy".`;
+        }
     }
 
     // --- 3. AUTO-CRAFT CAPTIONS, TITLE & LINES ---
     regenerateCopyBtn.addEventListener('click', () => {
-        const titleVal = titleInput.value.trim() || (selectedVideoData ? selectedVideoData.title : searchInput.value.trim());
+        if (currentMode === 'upload') {
+            const titleVal = titleInput.value.trim() || (selectedFile ? selectedFile.name : '');
+            if (!titleVal) {
+                alert('Please drop a video file or type a title first.');
+                return;
+            }
+            autoMakeCopy(titleVal, searchInput.value.trim(), '', '', selectedFile ? selectedFile.name : '');
+            return;
+        }
+        // Trending: base new copy on the original video title, not on the previously generated one
+        const titleVal = (selectedVideoData && selectedVideoData.title) ? selectedVideoData.title : titleInput.value.trim();
+        if (!titleVal) {
+            alert('Please select a video (or type a title) first.');
+            return;
+        }
         const descVal = selectedVideoData ? (selectedVideoData.description || "") : "";
         const uploaderVal = selectedVideoData ? (selectedVideoData.uploader || "") : "";
         autoMakeCopy(titleVal, searchInput.value.trim(), descVal, uploaderVal);
     });
 
+    function writeCopyForMode(mode, title, desc, caption) {
+        if (mode === currentMode) {
+            titleInput.value = title;
+            descInput.value = desc;
+            captionInput.value = caption;
+        } else if (mode === 'fetch') {
+            trendingState.title = title; trendingState.desc = desc; trendingState.caption = caption;
+        } else if (mode === 'upload') {
+            manualState.title = title; manualState.desc = desc; manualState.caption = caption;
+        }
+    }
+
     async function autoMakeCopy(titleText, topicText = "", descText = "", uploaderText = "", videoFilename = "") {
         if (!titleText && !videoFilename) return;
+        const requestMode = currentMode;
 
         autoMakeAlert.classList.remove('hidden');
         autoMakeAlert.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Auto-crafting content strictly based on video context...`;
@@ -421,28 +478,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/auto-make-copy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    title: titleText || "", 
+                body: JSON.stringify({
+                    title: titleText || "",
                     topic: topicText,
                     description: descText,
                     uploader: uploaderText,
-                    video_filename: videoFilename || (selectedFile ? selectedFile.name : "")
+                    // Only Manual Upload may reference the uploaded file
+                    video_filename: requestMode === 'upload' ? (videoFilename || (selectedFile ? selectedFile.name : "")) : ""
                 })
             });
 
             const json = await res.json();
             if (json.status === 'success' && json.data) {
-                titleInput.value = json.data.title || titleText;
-                descInput.value = json.data.description || '';
-                captionInput.value = json.data.caption || '';
-                autoMakeAlert.innerHTML = `<i class="fa-solid fa-sparkles"></i> Lines, captions & hashtags crafted based on video!`;
+                writeCopyForMode(requestMode, json.data.title || titleText, json.data.description || '', json.data.caption || '');
+                if (requestMode === currentMode) {
+                    autoMakeAlert.innerHTML = `<i class="fa-solid fa-sparkles"></i> Lines, captions & hashtags crafted based on video!`;
+                }
+            } else {
+                throw new Error(json.message || 'Copy generation failed');
             }
         } catch (e) {
             console.error(e);
-            titleInput.value = titleText;
-            descInput.value = `Comprehensive breakdown: ${titleText}. Exploring key market trends and strategies.\n\n#trending #viral #explore #strategy`;
-            captionInput.value = `What are your thoughts on this? 👀👇\n\n💡 Key Takeaways from ${titleText}:\n• Understand the core breakdown\n• Focus on high-probability execution\n\n💬 Drop your opinion below!\n📌 Save & share this reel!`;
-            autoMakeAlert.classList.add('hidden');
+            if (requestMode === currentMode) {
+                autoMakeAlert.classList.remove('hidden');
+                autoMakeAlert.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Could not generate copy right now. Click "Auto-Make Copy" to retry.`;
+            }
         }
     }
 
@@ -526,10 +586,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 .then(res => res.json())
                 .then(json => {
                     if (json.status === 'success' && json.data) {
-                        titleInput.value = json.data.title || '';
-                        descInput.value = json.data.description || '';
-                        captionInput.value = json.data.caption || '';
-                        if (autoMakeAlert) {
+                        if (selectedFile !== file && manualState.file !== file) return; // file was removed/replaced
+                        writeCopyForMode('upload', json.data.title || '', json.data.description || '', json.data.caption || '');
+                        if (autoMakeAlert && currentMode === 'upload') {
                             autoMakeAlert.classList.remove('hidden');
                             autoMakeAlert.innerHTML = `<i class="fa-solid fa-circle-check"></i> <strong>Visual Content Analyzed!</strong> Captions crafted from video scenes.`;
                         }
@@ -543,6 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 function fallbackCopy() {
+                    if (currentMode !== 'upload' || selectedFile !== file) return;
                     let fallbackTitle = titleInput.value.trim();
                     if (!fallbackTitle || isGeneric) {
                         fallbackTitle = (currentTopic && currentTopic !== 'trending') ? `${currentTopic.toUpperCase()} Strategy Breakdown` : "High-Probability Market Setup & Strategy";

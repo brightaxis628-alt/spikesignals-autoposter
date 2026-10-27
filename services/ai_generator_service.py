@@ -101,7 +101,11 @@ def analyze_video_frames(video_path: str, hint_topic: str = "trading") -> Option
     if not images:
         return None
 
-    topic_instruction = f"Topic hint: {hint_topic}." if hint_topic else ""
+    topic_instruction = (
+        f"Optional channel niche hint: '{hint_topic}'. Use it ONLY if the frames clearly match it; "
+        "if the video shows something else, ignore the hint completely and describe what is actually shown. "
+        "Never force an unrelated topic into the copy."
+    ) if hint_topic else ""
 
     prompt = (
         "You are an elite viral social media copywriter and growth strategist for TikTok, Instagram Reels, and YouTube Shorts.\n"
@@ -239,6 +243,158 @@ def generate_kling_video(prompt: str, platform: str) -> str:
 
     return output_filename
 
+# ---------------------------------------------------------------------------
+# Rule-based rephraser (used when the AI model is unavailable).
+# Rewrites the title so it says the SAME thing in a different, catchier way,
+# and always returns a COMPLETE title (never cut mid-word, never "...").
+# ---------------------------------------------------------------------------
+_PHRASE_SWAPS = [
+    (r"\bto buy right now\b", "worth buying today"),
+    (r"\bto buy now\b", "worth buying today"),
+    (r"\bto buy today\b", "worth buying today"),
+    (r"\bto buy\b", "worth buying"),
+    (r"\bright now\b", "today"),
+    (r"\bto watch\b", "on everyone's radar"),
+    (r"\bmust watch\b", "don't miss this"),
+    (r"\bexplained\b", "broken down"),
+    (r"\bfor beginners\b", "for new traders"),
+    (r"\bmake money\b", "grow your income"),
+    (r"\bfrom nothing to something\b", "from zero to success"),
+    (r"\bfrom scratch\b", "from zero"),
+    (r"\bmistakes\b", "costly mistakes"),
+    (r"\bsecrets\b", "hidden secrets"),
+    (r"\bstrategy\b", "game plan"),
+    (r"\bcrash\b", "sell-off"),
+    (r"\bhuge\b", "massive"),
+    (r"\bfast\b", "quickly"),
+    (r"\bshocking\b", "surprising"),
+    (r"\bnobody\b", "almost no one"),
+    (r"\bbest\b", "top"),
+    (r"\bdidn't believe\b", "couldn't believe"),
+    (r"\bdid not believe\b", "couldn't believe"),
+    (r"\b(\d+) year old\b", r"\1-year-old"),
+]
+_SMALL_WORDS = {"a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "at", "for", "by", "with", "vs", "is"}
+_DANGLING = {"a", "an", "the", "and", "or", "but", "of", "to", "in", "on", "at", "for", "by", "with", "your", "my", "this", "that", "is", "are", "only", "here", "what", "how", "why", "when", "who", "full", "honest"}
+
+
+def _smart_title_case(text: str) -> str:
+    words = text.split()
+    out = []
+    for i, w in enumerate(words):
+        if any(c.isupper() for c in w[1:]) or w.isupper():
+            out.append(w)  # keep brand casing: AI, NVDA, iPhone
+        elif i > 0 and w.lower() in _SMALL_WORDS:
+            out.append(w.lower())
+        else:
+            out.append(w[:1].upper() + w[1:])
+    return " ".join(out)
+
+
+def _apply_swaps(text: str) -> str:
+    out = text
+    for pat, rep in _PHRASE_SWAPS:
+        new = re.sub(pat, rep, out, count=1, flags=re.IGNORECASE)
+        if new != out:
+            out = new
+    return out
+
+
+def finalize_title(title: str, emoji: str = "🚀", max_len: int = 70) -> str:
+    """Guarantee a complete title: trims at word boundaries, keeps brackets balanced,
+    never ends on a dangling word/dash, never uses an ellipsis, exactly one closing emoji."""
+    emoji_re = r"[\U00010000-\U0010ffff\u2600-\u27ff\ufe0f\u200d]"
+    t = re.sub(r"\s*(\.\.\.|…)\s*", " ", (title or "")).strip()
+    t = re.sub(r"\s+", " ", t)
+    m = re.search(r"(\s*" + emoji_re + r"+)+\s*$", t)
+    if m and m.group(0).strip():
+        body, tail = t[:m.start()].strip(), m.group(0).strip().split()[0]
+    else:
+        body, tail = t, emoji
+    limit = max_len - (len(tail) + 1)
+    if len(body) > limit:
+        kept = []
+        for w in body.split():
+            if len(" ".join(kept + [w])) > limit:
+                break
+            kept.append(w)
+        body = " ".join(kept)
+
+    def _clean_end(b: str) -> str:
+        prev = None
+        while prev != b:
+            prev = b
+            if b.count("(") > b.count(")"):
+                b = b[:b.rfind("(")].strip()
+            b = b.rstrip(",:;-–— ").strip()
+            words = b.split()
+            while words and re.sub(r"[^\w']", "", words[-1]).lower() in _DANGLING:
+                words.pop()
+            b = " ".join(words)
+        return b
+
+    body = _clean_end(body) or _clean_end(t[:limit])
+    return f"{body} {tail}".strip()
+
+
+def rule_based_rephrase(clean_title: str, emoji: str = "🚀") -> list:
+    """Return candidate rewrites that keep the same meaning but phrase it differently."""
+    base = re.sub(r"\s+", " ", clean_title).strip()
+    candidates = []
+
+    # A) Two-part titles: "Hook? Statement" / "Hook: Statement" / "A - B"  ->  "Statement: Hook"
+    m = re.match(r"^(.{3,}?\?)\s+(.{6,})$", base) or re.match(r"^(.{3,}?):\s+(.{6,})$", base) or re.match(r"^(.{3,}?)\s+[-–|]\s+(.{6,})$", base)
+    if m:
+        hook = m.group(1).strip().rstrip(":-–|").strip()
+        stmt = _smart_title_case(_apply_swaps(m.group(2).strip()))
+        if not hook.endswith("?"):
+            hook = hook.rstrip(".!")
+        candidates.append(f"{stmt}: {hook} {emoji}")
+        candidates.append(f"{stmt} — {hook} {emoji}")
+
+    # B) Same sentence, rephrased with stronger wording
+    swapped = _smart_title_case(_apply_swaps(base))
+    if swapped.lower() != base.lower():
+        candidates.append(f"{swapped} {emoji}")
+
+    # C) Short titles get a curiosity frame that still states the same idea
+    if not candidates and len(base.split()) <= 2:
+        st = _smart_title_case(base)
+        candidates.extend([
+            f"{st}: What You Need to Know Today {emoji}",
+            f"{st} Explained in Under a Minute {emoji}",
+        ])
+    if not candidates and len(base) <= 40:
+        st = _smart_title_case(base)
+        candidates.extend([
+            f"{st}: The Full Story {emoji}",
+            f"{st} — Here's How It Happened {emoji}",
+            f"The Real Journey: {st} {emoji}",
+        ])
+
+    # D) Long titles with nothing to swap: lead with the strongest clause
+    if not candidates:
+        parts = re.split(r"[,;.!]\s+", base)
+        lead = _smart_title_case(parts[0]) if parts else _smart_title_case(base)
+        if len(lead) <= 50:
+            candidates.append(f"{lead} (Full Breakdown) {emoji}")
+        else:
+            candidates.append(f"Watch This: {lead} {emoji}" if len(lead) <= 56 else f"{lead} {emoji}")
+
+    def _body_len(c: str) -> int:
+        return len(re.sub(r"\s*[\U00010000-\U0010ffff\u2600-\u27ff\ufe0f]+\s*$", "", c))
+
+    fitting = [c for c in candidates if _body_len(c) <= 66]
+    if not fitting:
+        # Use the first complete clause (the main claim) instead of chopping a sentence mid-way
+        first = re.split(r"\s*(?:\?|:|\s[-–|]\s)\s*", base, maxsplit=1)[0].strip()
+        clause = _smart_title_case(_apply_swaps(first))
+        if base.startswith(first + "?"):
+            clause += "?"
+        fitting = [f"{clause} {emoji}"]
+    return [finalize_title(c, emoji) for c in fitting]
+
+
 def rephrase_with_ai(title: str, topic: str = "", uploader: str = "") -> Optional[dict]:
     """
     Intelligently rewrites and rephrases any video title stating the exact same topic
@@ -271,6 +427,7 @@ def rephrase_with_ai(title: str, topic: str = "", uploader: str = "") -> Optiona
         )
         data = json.loads(resp.choices[0].message.content)
         if "title" in data and "description" in data and "caption" in data:
+            data["title"] = finalize_title(str(data["title"]))
             data["analyzed_from"] = "ai_rephrase"
             return data
     except Exception as e:
@@ -419,7 +576,6 @@ def generate_viral_copy(
             act = m_how.group(1).strip()
             title_candidates.extend([
                 f"The Smart Way To {act} (Step-By-Step) 💡",
-                f"Master {act}: Key Secrets Revealed 🚀",
                 f"Stop Doing It Wrong: How To Actually {act} ✨",
                 f"The Proven Blueprint To {act} 📈"
             ])
@@ -427,11 +583,11 @@ def generate_viral_copy(
         m_i = re.match(r'^I\s+(.+?)\s*[\.\,\;\:\-]\s*(.+)$', clean_title, re.IGNORECASE)
         if m_i:
             did, outcome = m_i.group(1).strip(), m_i.group(2).strip()
+            did_tc, out_tc = _smart_title_case(did), _smart_title_case(outcome)
             title_candidates.extend([
-                f"{outcome}! (Testing {did}) 📊",
-                f"What Happened When I Tested: {did} 🚀",
-                f"The Shocking Result: {outcome} 💡",
-                f"Testing {did} — Here Are The Only Winners 🔥"
+                f"I {did_tc} — and {out_tc} 📊",
+                f"I {did_tc}: Here's What Happened 🚀",
+                f"{out_tc} After I {did_tc} 💡",
             ])
         # Pattern D: Numbers
         m_num = re.match(r'^(\d+)\s+(.+)$', clean_title, re.IGNORECASE)
@@ -439,33 +595,17 @@ def generate_viral_copy(
             num, rest = m_num.group(1), m_num.group(2).strip()
             title_candidates.extend([
                 f"The Top {num} {rest} You Need To Know 💡",
-                f"{num} Essential {rest} That Actually Work 🚀",
-                f"Ranking The {num} Best {rest} (Honest Review) 📊"
+                f"{num} {rest} (Most People Never Notice) 🚀",
+                f"Ranking The {num} Best {rest} 📊"
             ])
         if not title_candidates:
-            title_candidates.extend([
-                f"What Most People Miss About {clean_title} 💡",
-                f"The Real Truth Behind {clean_title} 📊",
-                f"Deep Dive Breakdown: {clean_title} ⚡",
-                f"Why Everyone Is Watching {clean_title} 🚀"
-            ])
+            title_emoji = "📈" if is_trading else ("🤖" if is_tech else "🚀")
+            title_candidates.extend(rule_based_rephrase(clean_title, emoji=title_emoji))
 
     # Filter out any exact duplicate of raw title
     filtered = [c for c in title_candidates if c.strip().lower() != raw_title.strip().lower()]
     chosen_title = random.choice(filtered if filtered else title_candidates)
-    if len(chosen_title) > 75:
-        # Truncate strictly at word boundaries so words are never sliced mid-sentence
-        words = chosen_title.split()
-        shortened = []
-        cur_len = 0
-        for w in words:
-            if cur_len + len(w) + 1 > 65:
-                break
-            shortened.append(w)
-            cur_len += len(w) + 1
-        chosen_title = " ".join(shortened)
-        if not re.search(r'[\U00010000-\U0010ffff\u2600-\u27ff]$', chosen_title):
-            chosen_title += " 🚀"
+    chosen_title = finalize_title(chosen_title)
 
     # 6. EXTRACT KEYWORDS & HASHTAGS (Banning phone export junk)
     words = re.findall(r'[a-zA-Z]{3,}', f"{clean_title} {topic}".lower())
