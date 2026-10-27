@@ -337,8 +337,8 @@ document.addEventListener('DOMContentLoaded', () => {
         autoMakeCopy(titleVal, searchInput.value.trim(), descVal, uploaderVal);
     });
 
-    async function autoMakeCopy(titleText, topicText = "", descText = "", uploaderText = "") {
-        if (!titleText) return;
+    async function autoMakeCopy(titleText, topicText = "", descText = "", uploaderText = "", videoFilename = "") {
+        if (!titleText && !videoFilename) return;
 
         autoMakeAlert.classList.remove('hidden');
         autoMakeAlert.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Auto-crafting content strictly based on video context...`;
@@ -348,10 +348,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    title: titleText, 
+                    title: titleText || "", 
                     topic: topicText,
                     description: descText,
-                    uploader: uploaderText
+                    uploader: uploaderText,
+                    video_filename: videoFilename || (selectedFile ? selectedFile.name : "")
                 })
             });
 
@@ -400,6 +401,10 @@ document.addEventListener('DOMContentLoaded', () => {
         handleFiles(this.files);
     });
 
+    function isGenericExportName(name) {
+        return /(whats\s*app\s*video|screen\s*recording|untitled|vid_\d+|img_\d+|pxl_\d+|\d{4}[-_]\d{2}[-_]\d{2}|at\s+\d{1,2}[\.:]\d{2}[\.:]\d{2}|video_\d+|mov_\d+)/i.test(name);
+    }
+
     function handleFiles(files) {
         if (files.length > 0) {
             const file = files[0];
@@ -409,18 +414,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 dropZone.classList.add('hidden');
                 filePreview.classList.remove('hidden');
 
-                // Clean filename: remove extension, duration tags (_35s, _real, _final, _1080p), replace underscores and split CamelCase
-                let cleanName = file.name.replace(/\.[^/.]+$/, "");
-                cleanName = cleanName.replace(/[\_\-]+(real|\d+s|final|v\d+|\d+p|cut|edit).*$/i, "");
-                cleanName = cleanName.replace(/[_\-]+/g, " ");
-                cleanName = cleanName.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+                const isGeneric = isGenericExportName(file.name);
+                const currentTopic = searchInput ? searchInput.value.trim() : 'trading';
 
-                titleInput.value = cleanName;
-                if (autoMakeAlert) {
-                    autoMakeAlert.classList.remove('hidden');
-                    autoMakeAlert.innerHTML = `<i class="fa-solid fa-circle-check"></i> Video loaded: <strong>${file.name}</strong>. Auto-crafting professional copy...`;
+                if (isGeneric) {
+                    titleInput.value = '';
+                    titleInput.placeholder = '🔍 Inspecting video frames with Multimodal AI...';
+                    descInput.value = '';
+                    descInput.placeholder = 'Analyzing visual scenes and generating hashtags...';
+                    captionInput.value = '';
+                    captionInput.placeholder = 'Crafting high-converting Instagram caption...';
+                    if (autoMakeAlert) {
+                        autoMakeAlert.classList.remove('hidden');
+                        autoMakeAlert.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles fa-spin"></i> <strong>Multimodal AI</strong> is inspecting video frames to see what is happening...`;
+                    }
+                } else {
+                    let cleanName = file.name.replace(/\.[^/.]+$/, "");
+                    cleanName = cleanName.replace(/[\_\-]+(real|\d+s|final|v\d+|\d+p|cut|edit).*$/i, "");
+                    cleanName = cleanName.replace(/[_\-]+/g, " ");
+                    cleanName = cleanName.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+                    titleInput.value = cleanName;
+                    if (autoMakeAlert) {
+                        autoMakeAlert.classList.remove('hidden');
+                        autoMakeAlert.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles fa-spin"></i> Video loaded: <strong>${escapeHtml(file.name)}</strong>. Inspecting video scenes with Multimodal AI...`;
+                    }
                 }
-                autoMakeCopy(cleanName);
+
+                // Analyze video frames directly with backend Multimodal Vision
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('topic', currentTopic);
+
+                fetch('/analyze-video-content', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(json => {
+                    if (json.status === 'success' && json.data) {
+                        titleInput.value = json.data.title || '';
+                        descInput.value = json.data.description || '';
+                        captionInput.value = json.data.caption || '';
+                        if (autoMakeAlert) {
+                            autoMakeAlert.classList.remove('hidden');
+                            autoMakeAlert.innerHTML = `<i class="fa-solid fa-circle-check"></i> <strong>Visual Content Analyzed!</strong> Captions crafted from video scenes.`;
+                        }
+                    } else {
+                        fallbackCopy();
+                    }
+                })
+                .catch(err => {
+                    console.warn("Visual inspection fallback:", err);
+                    fallbackCopy();
+                });
+
+                function fallbackCopy() {
+                    let fallbackTitle = titleInput.value.trim();
+                    if (!fallbackTitle || isGeneric) {
+                        fallbackTitle = (currentTopic && currentTopic !== 'trending') ? `${currentTopic.toUpperCase()} Strategy Breakdown` : "High-Probability Market Setup & Strategy";
+                    }
+                    autoMakeCopy(fallbackTitle, currentTopic);
+                }
             } else {
                 alert("Please select a valid MP4 or MOV video file.");
             }

@@ -82,21 +82,72 @@ class CopyRequest(BaseModel):
     topic: Optional[str] = ""
     description: Optional[str] = ""
     uploader: Optional[str] = ""
+    video_filename: Optional[str] = ""
+    video_path: Optional[str] = ""
 
 @app.post("/auto-make-copy")
 def auto_make_copy(data: CopyRequest):
     """
     Automated copy generator: Takes the selected video title and context,
     and automatically crafts catchy viral headlines, description with hashtags, and IG caption.
+    If a video file exists, uses Multimodal AI to inspect actual video frames.
     """
     try:
+        resolved_video_path = None
+        if data.video_path and os.path.exists(data.video_path):
+            resolved_video_path = data.video_path
+        elif data.video_filename:
+            candidate_paths = [
+                os.path.join("uploads", data.video_filename),
+                os.path.join("output", data.video_filename),
+                os.path.join("output", f"edited_{data.video_filename}"),
+                data.video_filename
+            ]
+            for p in candidate_paths:
+                if os.path.exists(p):
+                    resolved_video_path = p
+                    break
+
         copy_data = generate_viral_copy(
             data.title, 
             data.topic or "", 
             data.description or "", 
-            data.uploader or ""
+            data.uploader or "",
+            video_path=resolved_video_path
         )
         return {"status": "success", "data": copy_data}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+@app.post("/analyze-video-content")
+async def analyze_video_content(
+    file: UploadFile = File(...),
+    topic: Optional[str] = Form("trading")
+):
+    """
+    Multimodal Video Inspection: Saves uploaded video, extracts keyframes,
+    inspects actual visual scenes with AI Vision, and returns authentic viral copy.
+    """
+    try:
+        import time, re
+        safe_name = re.sub(r'[^a-zA-Z0-9_\.-]', '_', file.filename or "video.mp4")
+        saved_filename = f"manual_{int(time.time())}_{safe_name}"
+        saved_path = f"uploads/{saved_filename}"
+
+        with open(saved_path, "wb") as f:
+            f.write(await file.read())
+
+        copy_data = generate_viral_copy(
+            title=file.filename,
+            topic=topic or "trading",
+            video_path=saved_path
+        )
+        return {
+            "status": "success",
+            "data": copy_data,
+            "saved_filename": saved_filename,
+            "original_filename": file.filename
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

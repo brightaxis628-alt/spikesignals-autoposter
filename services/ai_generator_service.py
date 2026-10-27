@@ -2,20 +2,148 @@ import os
 import re
 import time
 import random
+import shutil
+import base64
+import json
+import subprocess
 import requests
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 KLING_API_KEY = os.getenv("KLING_API_KEY")
+
+GENERIC_CAMERA_PATTERN = re.compile(
+    r'(whats\s*app\s*video|screen\s*recording|untitled|vid_\d+|img_\d+|pxl_\d+|\b\d{4}[-_]\d{2}[-_]\d{2}\b|at\s+\d{1,2}[\.:]\d{2}[\.:]\d{2}|video_\d+|mov_\d+)',
+    re.IGNORECASE
+)
+
+def get_ffmpeg_exe():
+    if shutil.which("ffmpeg"):
+        return "ffmpeg"
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return "ffmpeg"
+
+def get_ai_client():
+    try:
+        from openai import OpenAI
+        if OPENROUTER_API_KEY and OPENROUTER_API_KEY.strip():
+            return OpenAI(api_key=OPENROUTER_API_KEY.strip(), base_url="https://openrouter.ai/api/v1"), OPENROUTER_MODEL
+        elif OPENAI_API_KEY and OPENAI_API_KEY.strip():
+            return OpenAI(api_key=OPENAI_API_KEY.strip()), "gpt-4o-mini"
+    except Exception as e:
+        print(f"Error initializing AI client: {e}")
+    return None, None
+
+def get_video_duration(video_path: str) -> float:
+    try:
+        cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video_path]
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        return float(res.stdout.strip())
+    except Exception:
+        return 5.0
+
+def analyze_video_frames(video_path: str, hint_topic: str = "trading") -> Optional[dict]:
+    """
+    Extracts 2-3 key frames from the video file and passes them to a Multimodal AI
+    Vision model to inspect the actual visual content, scene, action, mood, and charts,
+    then writes highly relevant viral copy.
+    """
+    if not video_path or not os.path.exists(video_path):
+        return None
+
+    client, model = get_ai_client()
+    if not client:
+        return None
+
+    ffmpeg_bin = get_ffmpeg_exe()
+    dur = get_video_duration(video_path)
+    timestamps = [max(0.5, dur * 0.15), max(1.0, dur * 0.5), max(1.5, dur * 0.8)]
+
+    temp_frames = []
+    images = []
+
+    pid = os.getpid()
+    rnd = int(time.time() * 1000) % 100000
+
+    for i, ts in enumerate(timestamps):
+        out_f = f"temp_vframe_{pid}_{rnd}_{i}.jpg"
+        cmd = [
+            ffmpeg_bin, "-y", "-ss", str(ts), "-i", video_path,
+            "-frames:v", "1", "-vf", "scale=640:-1", "-q:v", "3", out_f
+        ]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if os.path.exists(out_f):
+            temp_frames.append(out_f)
+            try:
+                with open(out_f, "rb") as f:
+                    b64 = base64.b64encode(f.read()).decode("utf-8")
+                    images.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+                    })
+            except Exception as e:
+                print(f"Error reading frame {out_f}: {e}")
+
+    # Clean up temp frames immediately
+    for f in temp_frames:
+        try:
+            if os.path.exists(f):
+                os.remove(f)
+        except Exception:
+            pass
+
+    if not images:
+        return None
+
+    topic_instruction = f"Topic hint: {hint_topic}." if hint_topic else ""
+
+    prompt = (
+        "You are an elite viral social media copywriter and growth strategist for TikTok, Instagram Reels, and YouTube Shorts.\n"
+        "Look at these actual video frames and inspect what is happening inside the video (scene, action, subject, charts, text overlays, emotions, environment).\n"
+        f"{topic_instruction}\n\n"
+        "CRITICAL RULES:\n"
+        "1. NEVER mention raw filenames, file extensions (.mp4), device names, camera tags, or timestamps (e.g. NEVER use words like 'WhatsApp Video', 'VID_', 'IMG_', 'Screen Recording', '2026-10-22', 'at 20.39.55').\n"
+        "2. Identify the real subject matter (e.g. trading chart/indicators, market breakdown, podcast/interview, software demo, fitness, comedy, travel, nature, etc.).\n"
+        "3. If trading charts or indicators (or SpikeSignals) are shown, focus on market momentum, technical setups, and risk management.\n"
+        "4. Generate high-CTR, authentic, viral copy:\n"
+        "   - 'title': Punchy viral title (under 65 chars with 1 relevant emoji). Never generic.\n"
+        "   - 'description': Engaging 2-3 sentence description summarizing what the viewer is seeing, followed by 6-8 relevant hashtags.\n"
+        "   - 'caption': High-converting Instagram caption with a visual hook, 2-3 bulleted key takeaways/observations, an engaging question prompting comments, and 12-15 targeted hashtags.\n\n"
+        "Return ONLY a valid JSON object with keys: 'title', 'description', 'caption'."
+    )
+
+    content = [{"type": "text", "text": prompt}] + images
+
+    try:
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": content}],
+            response_format={"type": "json_object"}
+        )
+        data = json.loads(resp.choices[0].message.content)
+        if "title" in data and "description" in data and "caption" in data:
+            data["analyzed_from"] = "multimodal_vision"
+            return data
+    except Exception as e:
+        print(f"Multimodal vision analysis error: {e}")
+
+    return None
 
 def generate_video_prompts(search_heading: str) -> dict:
     """
     Generates 3 different video prompts based on a single search heading.
-    If OpenAI API key is missing, falls back to a mock response for testing.
+    If OpenAI / OpenRouter key is missing, falls back to a mock response for testing.
     """
-    if not OPENAI_API_KEY or OPENAI_API_KEY == "":
+    client, model = get_ai_client()
+    if not client:
         return {
             "instagram": f"A vertical, highly engaging cinematic video about {search_heading} optimized for Reels.",
             "tiktok": f"A fast-paced, trendy vertical video about {search_heading} with quick cuts.",
@@ -23,9 +151,6 @@ def generate_video_prompts(search_heading: str) -> dict:
         }
 
     try:
-        from openai import OpenAI
-        client = OpenAI(api_key=OPENAI_API_KEY)
-
         system_prompt = (
             "You are an expert social media content creator. Given a trending topic, generate 3 different visual prompts for an AI Video Generator (like Kling or Sora). "
             "1 for Instagram (aesthetic, vertical), 1 for TikTok (trendy, fast-paced, vertical), and 1 for YouTube (detailed, cinematic, horizontal). "
@@ -33,17 +158,16 @@ def generate_video_prompts(search_heading: str) -> dict:
         )
 
         response = client.chat.completions.create(
-            model="gpt-4o",
+            model=model,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": search_heading}
             ],
             response_format={ "type": "json_object" }
         )
-        import json
         return json.loads(response.choices[0].message.content)
     except Exception as e:
-        print(f"OpenAI Error: {e}")
+        print(f"AI Prompt Error: {e}")
         return {
             "instagram": f"IG Video for {search_heading}",
             "tiktok": f"TikTok Video for {search_heading}",
@@ -114,21 +238,35 @@ def generate_kling_video(prompt: str, platform: str) -> str:
 
     return output_filename
 
-
-def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", uploader: str = "") -> dict:
+def generate_viral_copy(
+    title: str,
+    topic: str = "",
+    original_desc: str = "",
+    uploader: str = "",
+    video_path: Optional[str] = None
+) -> dict:
     """
     Context-aware viral copy generator.
-    Directly analyzes the video title, topic, entities, and context
-    to generate customized viral titles, YouTube/TikTok descriptions, and Instagram captions.
-    Cleans raw filenames and Instagram CTA strings into clean, high-CTR social content.
+    1. If video_path is provided and exists, runs Multimodal AI Vision analysis to see inside the video.
+    2. Purifies generic filenames, phone exports (WhatsApp Video, VID_, IMG_, timestamps), and Instagram CTAs.
+    3. Crafts customized viral titles, YouTube/TikTok descriptions, and Instagram captions.
     """
+    # 1. Check if we have an actual video file to inspect with Vision AI
+    if video_path and os.path.exists(video_path):
+        vision_result = analyze_video_frames(video_path, hint_topic=topic)
+        if vision_result:
+            return vision_result
+
     raw_title = (title or "").strip()
     t = raw_title
 
-    # 1. Strip leading emojis & decorative symbols
+    # 2. Check if the title is a raw camera/phone/WhatsApp export
+    is_generic_export = bool(GENERIC_CAMERA_PATTERN.search(t))
+
+    # Strip leading emojis & decorative symbols
     t = re.sub(r'^[\U00010000-\U0010ffff\u2600-\u27ff\u200d\s\💭\👇\🔥\🚀\📈\💡\⚡\📊\✨]+', '', t).strip()
 
-    # 2. Normalize and clean uploaded filenames (e.g. SpikeSignals_CompletePicture_Real_35s.mp4)
+    # Normalize and clean uploaded filenames (e.g. SpikeSignals_CompletePicture_Real_35s.mp4)
     is_filename = '_' in t or t.endswith('.mp4') or re.search(r'\b\d+s\b', t, re.IGNORECASE)
     if is_filename:
         t = re.sub(r'\.(mp4|mov|avi|mkv)$', '', t, flags=re.IGNORECASE)
@@ -137,7 +275,7 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
         t = re.sub(r'([a-z])([A-Z])', r'\1 \2', t)
         t = t.strip()
 
-    # 3. Detect and purify Instagram CTA captions (e.g. 'Drop a "Start" below and I will send you a free PDF...')
+    # 3. Detect and purify Instagram CTA captions
     is_cta = False
     cta_keyword = "START"
     m_cta = re.search(r'(drop|comment|dm|type|reply)\s+(?:a\s+|an\s+)?[\"\'\“\”]?([A-Za-z0-9]+)[\"\'\“\”]?\s+(below|and|to|for|in)\s*(.*)', t, re.IGNORECASE)
@@ -152,7 +290,7 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
         else:
             t = "Step-By-Step Trading Mastery Guide"
 
-    # 4. Clean channel tags and boilerplate suffixes
+    # Clean channel tags and boilerplate suffixes
     if " | " in t:
         t = t.split(" | ")[0].strip()
     elif uploader and f" - {uploader}" in t:
@@ -160,16 +298,23 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
     
     clean_title = re.sub(r'\[(Official|Music Video|HD|4K|Shorts|202\d).*?\]', '', t, flags=re.IGNORECASE).strip()
     clean_title = re.sub(r'\((Official|Music Video|HD|4K|Shorts|202\d).*?\)', '', clean_title, flags=re.IGNORECASE).strip()
-    if not clean_title or len(clean_title) < 4:
-        clean_title = "SpikeSignals Trading Strategy"
 
-    # Context analysis
+    # 4. IF TITLE IS GENERIC PHONE/APP EXPORT, OVERRIDE TO REAL HIGH-CONVERTING TOPIC
     combined_ctx = f"{clean_title} {topic}".lower()
     is_spikesignals = 'spikesignal' in combined_ctx.replace(' ', '') or 'spike signal' in combined_ctx
+
+    if is_generic_export or not clean_title or len(clean_title) < 4:
+        if is_spikesignals:
+            clean_title = "SpikeSignals Algorithmic Market Indicators"
+        elif any(k in combined_ctx for k in ['tech', 'ai', 'software', 'app', 'code']):
+            clean_title = "Breakthrough AI & Next-Gen Technology Insights"
+        else:
+            clean_title = "High-Probability Market Setup & Trading Strategy"
+
     is_trading = is_spikesignals or is_cta or any(k in combined_ctx for k in ['trad', 'stock', 'invest', 'forex', 'crypto', 'wealth', 'market', 'filter', 'chart', 'profit'])
     is_tech = any(k in combined_ctx for k in ['ai', 'tech', 'software', 'app', 'code', 'future', 'robot'])
 
-    # 5. GENERATE TITLE VARIATIONS (Similar, High-CTR, NEVER Raw/Identical)
+    # 5. GENERATE TITLE VARIATIONS (Similar, High-CTR, NEVER Raw/Identical, NEVER Generic WhatsApp)
     if is_spikesignals:
         title_candidates = [
             "SpikeSignals: The Complete Trading System Overview 📈",
@@ -184,6 +329,26 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
             "Stop Trading Without A Plan: The Step-By-Step Roadmap 💡",
             "The Exact Roadmap Every Profitable Trader Follows 🔥"
         ]
+    elif is_generic_export:
+        if is_trading:
+            title_candidates = [
+                "The Exact Strategy Smart Traders Use Every Single Day 📈",
+                "How To Spot High-Probability Entries Like A Pro ⚡",
+                "The #1 Trading Rule Every Profitable Trader Follows 💡",
+                "Mastering Price Action: The Ultimate Breakdown 🚀"
+            ]
+        elif is_tech:
+            title_candidates = [
+                "The Future Of Tech: Breakthrough Insights You Need To Know 🚀",
+                "Inside The Next Big Shift In Artificial Intelligence 💡",
+                "Why Everyone Is Watching This New Tech Revolution ⚡"
+            ]
+        else:
+            title_candidates = [
+                "Key Insights You Don't Want To Miss 💡",
+                "The Real Truth Behind This Trend 📊",
+                "Why Everyone Is Talking About This Setup 🚀"
+            ]
     else:
         title_candidates = []
         # Pattern A: 'Why [Subject] [Verb] [Action]'
@@ -244,12 +409,14 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
     if len(chosen_title) > 75:
         chosen_title = f"{chosen_title[:70]}... 🚀"
 
-    # 6. EXTRACT KEYWORDS & HASHTAGS
+    # 6. EXTRACT KEYWORDS & HASHTAGS (Banning phone export junk)
     words = re.findall(r'[a-zA-Z]{3,}', f"{clean_title} {topic}".lower())
     stop_words = {
         'the', 'and', 'for', 'that', 'this', 'with', 'from', 'have', 'only', 'ran', 
         'through', 'video', 'watch', 'are', 'was', 'were', 'will', 'you', 'your', 'about',
-        'what', 'when', 'where', 'which', 'who', 'how', 'why', 'can', 'could', 'drop', 'start', 'send'
+        'what', 'when', 'where', 'which', 'who', 'how', 'why', 'can', 'could', 'drop', 'start', 'send',
+        'whatsapp', 'whats', 'app', 'video', 'videos', 'vid', 'img', 'pxl', 'screen', 'recording',
+        'untitled', 'temp', 'camera', 'file', 'clip', 'cut', 'edit', 'real', 'final'
     }
     extracted_keywords = [w for w in words if w not in stop_words][:6]
     hashtags = [f"#{k}" for k in extracted_keywords]
@@ -280,6 +447,12 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
             "covering market structure, high-probability execution, and capital protection.\n\n"
             f"{desc_tags}"
         )
+    elif is_generic_export and is_trading:
+        description = (
+            "A deep dive breakdown into high-probability market structure and disciplined execution. "
+            "Discover key levels, entry triggers, and capital protection rules to trade with confidence.\n\n"
+            f"{desc_tags}"
+        )
     elif is_trading:
         description = (
             f"Deep dive breakdown on {clean_title}. Discover key levels, market sentiment, "
@@ -288,7 +461,7 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
         )
     else:
         description = (
-            f"Comprehensive breakdown on {clean_title}. Exploring the key lessons, industry shifts, "
+            f"Comprehensive breakdown on {clean_title}. Exploring key lessons, industry shifts, "
             f"and what this means moving forward.\n\n"
             f"{desc_tags}"
         )
@@ -310,6 +483,17 @@ def generate_viral_copy(title: str, topic: str = "", original_desc: str = "", up
             "Having a single, disciplined blueprint is what separates consistent execution from costly mistakes.\n\n"
             f"💬 Drop '{cta_keyword}' in the comments below to receive the complete guide!\n"
             "📌 Save this post so you don't lose it on your feed.\n\n"
+            f"{caption_tags}"
+        )
+    elif is_generic_export and is_trading:
+        caption = (
+            "What is your #1 rule when trading volatile markets? 👀👇\n\n"
+            "💡 Key Trading Principles from this breakdown:\n"
+            "• Wait for clear confirmation at key price levels\n"
+            "• Protect your capital first—profits follow discipline\n"
+            "• Never chase extended moves without a defined risk setup\n\n"
+            "💬 Drop a comment below with your trading plan for this week!\n"
+            "📌 Bookmark & save this reel for your trading journal.\n\n"
             f"{caption_tags}"
         )
     else:
